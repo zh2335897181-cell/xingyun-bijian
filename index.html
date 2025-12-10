@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="nebula">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="description" content="Nebula Quill: A local-first AI writing IDE.">
+    <title>星云笔尖 v3.7</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
+
+    <!-- 图标库 -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='grad' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%236366f1;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%23a855f7;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='50' cy='50' r='48' fill='%231e293b' stroke='url(%23grad)' stroke-width='3'/%3E%3Cpath d='M50 20 L72 55 Q80 70 50 85 Q20 70 28 55 Z' fill='url(%23grad)'/%3E%3C/svg%3E">
+
+    <style>
+        /* --- 核心主题系统 --- */
+        :root {
+            --bg-color: #0b0e14; --text-main: #e2e8f0; --text-sub: #94a3b8;
+            --panel-bg: rgba(30, 41, 59, 0.4); --panel-border: rgba(255, 255, 255, 0.06);
+            --accent-primary: #818cf8; --accent-secondary: #c084fc; --accent-glow: rgba(129, 140, 248, 0.5);
+            --input-bg: rgba(0, 0, 0, 0.2); --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+        }
+
+        [data-theme='nebula'] { --bg-image: radial-gradient(circle at 10% 20%, rgba(49,46,129,0.4), transparent 40%), radial-gradient(circle at 90% 80%, rgba(88,28,135,0.3), transparent 40%), linear-gradient(to bottom, #0f172a, #020617); --panel-bg: rgba(15,23,42,0.6); --accent-primary: #818cf8; --accent-secondary: #6366f1; }
+        [data-theme='crystal'] { --bg-color: #081b29; --bg-image: radial-gradient(circle at 50% 0%, rgba(34,211,238,0.15), transparent 50%), linear-gradient(135deg, #0f172a 0%, #111827 100%); --panel-bg: rgba(255,255,255,0.03); --panel-border: rgba(255,255,255,0.12); --accent-primary: #22d3ee; --accent-secondary: #06b6d4; --text-main: #f0f9ff; }
+        [data-theme='dawn'] { --bg-color: #fff1f2; --bg-image: linear-gradient(120deg, #fff1f2 0%, #ffe4e6 100%); --text-main: #334155; --text-sub: #64748b; --panel-bg: rgba(255,255,255,0.65); --panel-border: rgba(244,114,182,0.2); --accent-primary: #db2777; --accent-secondary: #be185d; --input-bg: rgba(255,255,255,0.5); --scrollbar-thumb: rgba(0,0,0,0.1); }
+        [data-theme='cyber'] { --bg-color: #000000; --bg-image: linear-gradient(90deg, rgba(20,20,20,0.5) 1px, transparent 1px), linear-gradient(rgba(20,20,20,0.5) 1px, transparent 1px); background-size: 40px 40px; --panel-bg: rgba(10,10,10,0.9); --panel-border: #333; --accent-primary: #2dd4bf; --accent-secondary: #0d9488; --input-bg: #000; }
+        [data-theme='ink'] { --bg-color: #f5f5f4; --bg-image: radial-gradient(#e7e5e4 1px, transparent 1px); background-size: 20px 20px; --text-main: #1c1917; --text-sub: #57534e; --panel-bg: rgba(255,255,255,0.85); --panel-border: rgba(0,0,0,0.08); --accent-primary: #44403c; --accent-secondary: #292524; --input-bg: #fff; --scrollbar-thumb: rgba(0,0,0,0.15); }
+
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-color); background-image: var(--bg-image); background-attachment: fixed; color: var(--text-main); transition: all 0.5s ease; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+        .serif-font { font-family: 'Noto Serif SC', serif; } .mono-font { font-family: 'JetBrains Mono', monospace; }
+
+        .glass-panel { background: var(--panel-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); border: 1px solid var(--panel-border); box-shadow: 0 8px 32px -8px rgba(0,0,0,0.15); border-radius: 1.5rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .glass-input { background: var(--input-bg); border: 1px solid transparent; color: var(--text-main); transition: all 0.2s; width: 100%; }
+        .glass-input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 1px var(--accent-primary); background: var(--panel-bg); }
+        .btn-gradient { background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary)); color: white; transition: all 0.3s; }
+        .btn-gradient:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0,0,0,0.2); filter: brightness(1.1); }
+        .btn-ghost { background: transparent; border: 1px solid var(--panel-border); color: var(--text-sub); transition: all 0.2s; }
+        .btn-ghost:hover { border-color: var(--accent-primary); color: var(--text-main); background: var(--panel-bg); }
+        .btn-accent { background: var(--accent-primary); color: white; transition: all 0.2s; }
+        .btn-accent:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+        .text-accent { color: var(--accent-primary) !important; }
+        .card-active { border-color: var(--accent-primary); background: linear-gradient(135deg, var(--panel-bg), rgba(var(--accent-primary), 0.1)); box-shadow: 0 0 20px rgba(var(--accent-primary), 0.2); }
+        .blur-content { filter: blur(8px); pointer-events: none; user-select: none; }
+        .fade-in { animation: fadeIn 0.5s ease-out; } @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .dropdown-enter { animation: dropIn 0.2s ease-out forwards; } @keyframes dropIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Chips Style */
+        .lore-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; background: rgba(0,0,0,0.2); border: 1px solid var(--panel-border); border-radius: 8px; cursor: pointer; transition: all 0.2s; color: var(--text-sub); font-size: 0.75rem; white-space: nowrap; user-select: none; }
+        .lore-chip:hover { background: var(--panel-bg); border-color: var(--accent-primary); color: var(--text-main); }
+        .lore-chip-icon { color: var(--accent-primary); font-size: 0.9em; }
+
+        .novel-tag { background: rgba(var(--accent-primary), 0.1); border: 1px solid var(--panel-border); color: var(--text-main); font-size: 0.75rem; padding: 3px 10px; border-radius: 99px; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+        .tag-remove:hover { color: #f43f5e; cursor: pointer; }
+        .tag-selectable { background: var(--input-bg); border: 1px solid transparent; padding: 5px 12px; border-radius: 8px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; color: var(--text-sub); }
+        .tag-selectable.selected { background-color: var(--accent-primary); color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        
+        .announcement-important { border-left: 4px solid #f59e0b; background: linear-gradient(90deg, rgba(245, 158, 11, 0.15), transparent); }
+        .tutorial-body ul { list-style: disc; padding-left: 1.2rem; margin-bottom: 1rem; color: var(--text-sub); }
+        .tutorial-body li { margin-bottom: 0.5rem; }
+        .tutorial-body h4 { font-weight: bold; color: var(--text-main); margin-top: 1.5rem; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 8px; }
+        .tutorial-body code { background: rgba(0,0,0,0.3); padding: 2px 5px; border-radius: 4px; font-family: monospace; color: var(--accent-primary); }
+
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 99px; } ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+        
+        /* --- Zen Mode (禅模式) Optimized for Mobile --- */
+        body.zen-mode #bg-canvas, body.zen-mode nav, body.zen-mode #main-content > div:not(#section-loom), body.zen-mode footer, body.zen-mode #pet-container, body.zen-mode #theme-menu, body.zen-mode #section-outline { display: none !important; }
+        body.zen-mode #section-loom { display: block; position: fixed; inset: 0; z-index: 50; padding: 0; margin: 0; background: var(--bg-color); height: 100dvh; /* 适配移动端动态视口 */ }
+        body.zen-mode #loom-panel { height: 100dvh; border: none; border-radius: 0; background: transparent; box-shadow: none; }
+        body.zen-mode #loom-header { opacity: 0; transition: opacity 0.3s; }
+        body.zen-mode #loom-header:hover { opacity: 1; }
+        body.zen-mode #chapter-editor { font-size: 1.25rem; line-height: 2; max-width: 900px; margin: 0 auto; padding-top: 5vh; height: calc(100% - 20px); }
+        #zen-exit-btn { display: none; }
+        body.zen-mode #zen-exit-btn { display: block; position: fixed; top: 20px; right: 20px; z-index: 60; opacity: 0.3; transition: opacity 0.3s; }
+        body.zen-mode #zen-exit-btn:hover { opacity: 1; }
+
+        /* --- AI Toolbar (划词工具栏) --- */
+        #ai-toolbar { position: fixed; z-index: 1000; background: var(--panel-bg); backdrop-filter: blur(16px); border: 1px solid var(--panel-border); border-radius: 12px; padding: 4px; display: flex; gap: 4px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3); transform: translateY(10px); opacity: 0; pointer-events: none; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+        #ai-toolbar.visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
+        .ai-tool-btn { padding: 6px 10px; border-radius: 8px; font-size: 0.75rem; color: var(--text-main); background: transparent; transition: background 0.2s; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+        .ai-tool-btn:hover { background: rgba(255,255,255,0.1); }
+        
+        /* --- Graph Visual (关系图) --- */
+        #graph-canvas, #lore-canvas { width: 100%; height: 100%; border-radius: 1rem; cursor: grab; touch-action: none; /* 防止移动端拖拽时滚动页面 */ }
+        #graph-canvas:active, #lore-canvas:active { cursor: grabbing; }
+
+        /* Lore specific grid bg */
+        .grid-bg { background-image: linear-gradient(var(--panel-border) 1px, transparent 1px), linear-gradient(90deg, var(--panel-border) 1px, transparent 1px); background-size: 20px 20px; background-position: center center; }
+
+        /* --- Pet (桌宠) --- */
+        #pet-container { position: fixed; bottom: 20px; right: 20px; width: 100px; height: 100px; z-index: 999; pointer-events: none; }
+        #pet-body { width: 60px; height: 60px; background: radial-gradient(circle at 30% 30%, var(--accent-primary), var(--accent-secondary)); border-radius: 50%; position: absolute; bottom: 10px; right: 10px; box-shadow: 0 0 20px var(--accent-primary), inset -5px -5px 10px rgba(0,0,0,0.2); pointer-events: auto; cursor: pointer; transition: transform 0.2s; animation: pet-float 3s ease-in-out infinite; -webkit-tap-highlight-color: transparent; }
+        #pet-body::after { content: ''; position: absolute; top: -10%; left: -10%; right: -10%; bottom: -10%; border-radius: 50%; background: var(--accent-primary); opacity: 0.3; filter: blur(10px); z-index: -1; }
+        .pet-eyes { position: absolute; top: 35%; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+        .pet-eye { width: 8px; height: 8px; background: #fff; border-radius: 50%; position: relative; animation: pet-blink 4s infinite; }
+        .pet-eye::after { content: ''; position: absolute; width: 4px; height: 4px; background: #000; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        #pet-bubble { position: absolute; bottom: 80px; right: 0; background: var(--panel-bg); border: 1px solid var(--panel-border); color: var(--text-main); font-size: 0.75rem; padding: 8px 12px; border-radius: 12px 12px 0 12px; width: 160px; opacity: 0; transform: scale(0.8); transform-origin: bottom right; transition: all 0.3s; backdrop-filter: blur(12px); pointer-events: none; }
+        #pet-bubble.show { opacity: 1; transform: scale(1); }
+        @keyframes pet-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+        @keyframes pet-blink { 0%, 96%, 100% { height: 8px; transform: scaleY(1); } 98% { height: 1px; transform: scaleY(0.1); } }
+        .pet-happy { animation: pet-jump 0.5s infinite !important; }
+        @keyframes pet-jump { 0%, 100% { transform: translateY(0) scale(1,1); } 50% { transform: translateY(-15px) scale(0.9, 1.1); } }
+        
+        /* --- Critique Modal Specifics (毒舌审稿) --- */
+        #critique-content { white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; line-height: 1.6; }
+        .critique-highlight { color: #fca5a5; font-weight: bold; border-bottom: 1px dashed #fca5a5; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-indigo-500/30">
+
+    <canvas id="bg-canvas"></canvas>
+    
+    <!-- Zen Mode Exit Button -->
+    <button id="zen-exit-btn" onclick="toggleZenMode()" class="btn-ghost px-4 py-2 rounded-full border border-red-500/30 text-red-400 font-bold backdrop-blur-md">✕ 退出禅模式</button>
+
+    <!-- AI Polish Toolbar -->
+    <div id="ai-toolbar">
+        <button onclick="aiAssist('polish')" class="ai-tool-btn">✨ 润色</button>
+        <button onclick="aiAssist('expand')" class="ai-tool-btn">🔍 扩写</button>
+        <button onclick="aiAssist('shorten')" class="ai-tool-btn">✂️ 精简</button>
+        <div class="w-px h-4 bg-white/10 mx-1"></div>
+        <button onclick="aiAssist('synonym')" class="ai-tool-btn">🔄 换词</button>
+    </div>
+
+    <nav class="w-full h-18 fixed top-0 z-[100] glass-panel border-t-0 border-x-0 border-b border-[var(--panel-border)] flex items-center shadow-sm backdrop-blur-md !rounded-none">
+        <div class="max-w-[1400px] mx-auto w-full px-6 flex justify-between items-center h-full">
+            <div class="flex items-center gap-4 select-none shrink-0">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center text-white shadow-lg text-xl">✒️</div>
+                <div class="hidden sm:block"><h1 class="text-lg font-bold tracking-widest serif-font text-accent leading-none">星云笔尖</h1><span class="text-[10px] text-sub tracking-widest opacity-60 uppercase">Nebula Quill v3.7</span></div>
+            </div>
+            
+            <div class="flex items-center gap-3">
+                <div class="hidden xl:flex items-center gap-3 px-4 py-1.5 rounded-full border border-[var(--panel-border)] bg-[var(--input-bg)]"><span id="live-clock" class="text-xs text-sub mono-font border-r border-[var(--panel-border)] pr-3">00:00</span><span id="save-status" class="text-xs text-sub">Ready</span></div>
+                
+                <div class="relative cursor-pointer p-2 hover:bg-[var(--panel-border)] rounded-xl transition opacity-70 hover:opacity-100" onclick="toggleAnnouncements()">
+                    <span class="text-lg">🔔</span>
+                    <span id="notification-dot" class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full hidden animate-bounce shadow-sm"></span>
+                </div>
+
+                <button onclick="toggleTutorial()" class="p-2 rounded-xl hover:bg-[var(--panel-border)] transition text-lg opacity-70 hover:opacity-100" title="航行指南 (教程)">📘</button>
+
+                <div id="engine-status" class="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--panel-border)] bg-[var(--input-bg)]"><span class="w-2 h-2 rounded-full bg-gray-500 transition-colors" id="engine-dot"></span><span id="engine-name" class="text-xs font-mono text-sub">No Key</span></div>
+                <div class="w-px h-6 bg-[var(--panel-border)] mx-1 hidden md:block"></div>
+                
+                <div class="relative shrink-0">
+                    <button onclick="toggleThemeMenu()" id="theme-btn" class="p-2 rounded-xl hover:bg-[var(--panel-border)] transition text-lg opacity-70 hover:opacity-100" title="设置 & 主题">⚙️</button>
+                    <div id="theme-menu" class="absolute right-0 mt-4 w-48 glass-panel rounded-xl overflow-hidden hidden shadow-2xl z-[101] border border-[var(--panel-border)] p-1">
+                        <div class="px-3 py-2 text-[10px] text-sub font-bold uppercase tracking-wider opacity-60">Theme</div>
+                        <button onclick="changeTheme('nebula')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">🌌 星河 (Nebula)</button>
+                        <button onclick="changeTheme('crystal')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">💎 水晶 (Crystal)</button>
+                        <button onclick="changeTheme('forest')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">🌲 森林 (Forest)</button>
+                        <button onclick="changeTheme('ocean')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">🌊 海洋 (Ocean)</button>
+                        <button onclick="changeTheme('sunset')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">🌇 日落 (Sunset)</button>
+                        <button onclick="changeTheme('moonlight')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">🌑 月光 (Moonlight)</button>
+                        <button onclick="changeTheme('night')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">🌙 夜晚 (Night)</button>
+                        <button onclick="changeTheme('dawn')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">🌅 晨曦 (Dawn)</button>
+                        <button onclick="changeTheme('ink')" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">☁️ 水墨 (Ink)</button>
+                        <div class="h-px bg-[var(--panel-border)] my-1"></div>
+                        <div class="px-3 py-2 text-[10px] text-sub font-bold uppercase tracking-wider opacity-60">Data</div>
+                        <button onclick="exportData()" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">📤 备份数据 (JSON)</button>
+                        <button onclick="document.getElementById('file-upload').click()" class="w-full text-left px-3 py-2 text-xs text-sub hover:text-main hover:bg-[var(--panel-bg)] rounded-lg flex items-center gap-2">📥 恢复数据</button>
+                        <div class="h-px bg-[var(--panel-border)] my-1"></div>
+                        <div class="px-3 py-2 text-[10px] text-sub font-bold uppercase tracking-wider opacity-60">Advanced</div>
+                        <div class="px-3 py-1">
+                            <input type="text" id="custom-base-url" placeholder="DeepSeek Base URL" class="w-full bg-[var(--input-bg)] text-xs rounded px-2 py-1 text-sub focus:text-main border border-transparent focus:border-[var(--accent-primary)] outline-none" onchange="updateBaseUrl()">
+                        </div>
+                        <div class="px-3 py-1 mb-2">
+                            <label class="text-[10px] text-sub font-bold uppercase tracking-wider opacity-60 block mb-1">默认章节字数</label>
+                            <input type="text" id="setting-default-words" placeholder="例如: 2000-3000" class="w-full bg-[var(--input-bg)] text-xs rounded px-2 py-1.5 text-sub focus:text-main border border-transparent focus:border-[var(--accent-primary)] outline-none" onchange="updateDefaultWords()">
+                        </div>
+                        <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importData(this)">
+                    </div>
+                </div>
+
+                <button onclick="togglePet()" id="pet-btn" class="p-2 rounded-xl hover:bg-[var(--panel-border)] transition text-lg opacity-70 hover:opacity-100 text-accent" title="召唤/隐藏星灵">👾</button>
+                <button onclick="toggleResetModal()" class="text-xs text-sub hover:text-red-400 transition ml-2 whitespace-nowrap shrink-0 opacity-60 hover:opacity-100" title="清空所有数据">重置</button>
+                <div class="flex items-center bg-[var(--input-bg)] rounded-xl px-1 py-1 border border-[var(--panel-border)] ml-2"><div class="w-8 h-8 flex items-center justify-center rounded-lg bg-[var(--panel-bg)] mr-2" id="engine-icon">🔑</div><input type="password" id="api-key" placeholder="API Key" class="bg-transparent border-none text-xs w-24 text-main focus:ring-0 placeholder-opacity-50" oninput="detectEngine()"></div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="pet-container">
+        <div id="pet-bubble">主人，该码字啦~ 📝</div>
+        <div id="pet-body" onclick="petInteract()">
+            <div class="pet-eyes">
+                <div class="pet-eye" id="eye-l"></div>
+                <div class="pet-eye" id="eye-r"></div>
+            </div>
+        </div>
+    </div>
+
+    <main id="main-content" class="max-w-[1400px] mx-auto w-full pt-24 px-4 md:px-6 space-y-8 flex-grow pb-20">
+        <div class="flex justify-between items-end pb-2 border-b border-[var(--panel-border)]"><div><h2 class="text-2xl font-bold serif-font text-main">世界构筑</h2><p class="text-xs text-sub mt-1 opacity-70">“用星光编织你的宏大世界...”</p></div><button onclick="downloadNovel()" class="btn-gradient px-5 py-2 rounded-xl text-sm font-bold shadow-lg flex items-center gap-2">📥 导出全书 (TXT)</button></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 h-auto min-h-[600px]">
+            <div class="lg:col-span-8 glass-panel rounded-3xl p-2 flex flex-col h-full overflow-hidden fade-in" style="animation-delay: 0.1s;">
+                <div class="flex gap-2 p-2 mb-1 bg-[var(--input-bg)] rounded-2xl mx-2 mt-2">
+                    <button onclick="switchTab('tab-prompt')" class="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 shadow-md bg-[var(--panel-bg)] text-accent" id="btn-tab-prompt">✨ 核心梗概</button>
+                    <button onclick="switchTab('tab-lore')" class="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 opacity-60 hover:opacity-100 hover:bg-[var(--panel-bg)]" id="btn-tab-lore">🌍 世界观 (Lore)</button>
+                    <button onclick="switchTab('tab-graph')" class="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 opacity-60 hover:opacity-100 hover:bg-[var(--panel-bg)]" id="btn-tab-graph">🕸️ 关系星图</button>
+                </div>
+                <div class="p-4 flex-grow flex flex-col relative h-full">
+                    <div id="tab-prompt" class="h-full flex flex-col w-full">
+                        <div class="mb-4 flex flex-wrap gap-2 items-center min-h-[40px] bg-[var(--input-bg)] p-2.5 rounded-xl border border-[var(--panel-border)]">
+                            <button onclick="toggleTagSelector()" class="text-xs btn-ghost px-4 py-1.5 rounded-full flex items-center gap-1 border-dashed border border-current opacity-70 hover:opacity-100 transition hover:border-solid hover:bg-[var(--accent-primary)] hover:text-white hover:border-transparent"><span>🏷️ 添加标签</span></button>
+                            <div id="selected-tags-container" class="flex flex-wrap gap-2"></div>
+                        </div>
+                        <textarea id="novel-prompt" class="glass-input w-full flex-grow rounded-2xl p-5 resize-none mb-4 text-base leading-relaxed min-h-[400px]" placeholder="在此输入故事核心梗概...&#10;例如：赛博朋克背景下，一个专门替机器人写遗书的作家..." oninput="debounceSave()"></textarea>
+                        <!-- ADDED ID HERE -->
+                        <div class="flex justify-end"><button id="btn-gen-idea" onclick="generateInitialAnalysis()" class="btn-gradient font-bold py-3 px-10 rounded-xl shadow-lg flex items-center gap-2 text-sm transition-transform hover:scale-105 active:scale-95"><span>🧠 构思世界架构</span></button></div>
+                    </div>
+                    
+                    <div id="tab-lore" class="h-full flex-col hidden w-full">
+                        <div class="flex flex-col gap-3 mb-3">
+                            <div class="flex justify-between items-center border-b border-[var(--panel-border)] pb-2 px-1">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-8 h-8 rounded-lg bg-[var(--input-bg)] flex items-center justify-center text-accent">📚</div>
+                                    <div><h3 class="font-bold text-sm text-main leading-none">创世档案</h3><p class="text-[10px] text-sub opacity-70 mt-0.5">Lore Database</p></div>
+                                </div>
+                                <div class="bg-[var(--input-bg)] p-1 rounded-lg flex border border-[var(--panel-border)]">
+                                    <button onclick="setLoreView('text')" id="btn-lore-text" class="px-4 py-1.5 text-xs font-bold rounded-md bg-[var(--panel-bg)] text-accent shadow-sm transition-all">📝 描述</button>
+                                    <button onclick="setLoreView('graph')" id="btn-lore-graph" class="px-4 py-1.5 text-xs font-bold rounded-md text-sub hover:text-main transition-all">🕸️ 拓扑</button>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 px-1">
+                                <span class="text-[9px] font-bold text-sub uppercase tracking-wider shrink-0 opacity-50 mr-1">Quick Add:</span>
+                                <button class="lore-chip" onclick="insertLoreTemplate('等级体系')"><span class="lore-chip-icon">📈</span>等级</button>
+                                <button class="lore-chip" onclick="insertLoreTemplate('地理环境')"><span class="lore-chip-icon">🗺️</span>地图</button>
+                                <button class="lore-chip" onclick="insertLoreTemplate('势力组织')"><span class="lore-chip-icon">🏰</span>势力</button>
+                                <div class="w-px h-4 bg-[var(--panel-border)] mx-1"></div>
+                                <button onclick="aiGenLore()" class="lore-chip !border-[var(--accent-primary)] !text-accent hover:!bg-[var(--accent-primary)] hover:!text-white shadow-sm"><span class="lore-chip-icon">✨</span>AI 推演</button>
+                            </div>
+                        </div>
+                        <div class="relative flex-grow overflow-hidden rounded-xl border border-[var(--panel-border)] bg-[var(--input-bg)] group min-h-[450px]">
+                            <div id="lore-loading" class="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex flex-col items-center justify-center rounded-xl"><div class="animate-spin text-3xl mb-2 text-accent">🔮</div><p class="text-xs text-main animate-pulse">正在推演世界法则...</p></div>
+                            <div id="lore-text-view" class="w-full h-full absolute inset-0 z-10 p-1">
+                                <textarea id="novel-lore" class="w-full h-full bg-transparent p-5 resize-none text-sm mono-font focus:outline-none" style="background-image: linear-gradient(var(--panel-border) 1px, transparent 1px); background-size: 100% 32px; line-height: 32px;" placeholder="【创世档案】&#10;格式提示：&#10;【大标题】会生成核心节点&#10;名称：描述 会生成子节点&#10;例如：&#10;【魔法】&#10;火球术：基础攻击" oninput="debounceSave()"></textarea>
+                            </div>
+                            <div id="lore-graph-view" class="w-full h-full absolute inset-0 z-20 flex flex-col grid-bg hidden bg-[var(--bg-color)]">
+                                <div class="absolute top-3 left-3 z-10 bg-[var(--panel-bg)] backdrop-blur px-3 py-1.5 rounded-lg text-xs text-sub border border-[var(--panel-border)] pointer-events-none shadow-sm flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span><span>Force Layout</span></div>
+                                <canvas id="lore-canvas"></canvas>
+                                <button onclick="parseLoreToGraph()" class="absolute bottom-3 right-3 btn-ghost text-xs px-3 py-1.5 rounded-lg z-10 bg-[var(--panel-bg)] shadow-sm backdrop-blur border border-[var(--panel-border)] hover:text-accent">🔄 刷新星网</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="tab-graph" class="h-full flex-col hidden w-full relative min-h-[500px]">
+                        <div class="absolute top-2 left-2 z-10 bg-[var(--panel-bg)] px-3 py-1 rounded-lg text-xs text-sub border border-[var(--panel-border)] pointer-events-none">✨ 拖动星体整理关系</div>
+                        <canvas id="graph-canvas"></canvas>
+                        <button onclick="initGraph()" class="absolute bottom-2 right-2 btn-ghost text-xs px-3 py-1 rounded-lg">重置视图</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-4 glass-panel rounded-3xl p-5 flex flex-col h-full relative fade-in" style="animation-delay: 0.2s;">
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-[var(--panel-border)]">
+                    <h2 class="text-base font-bold text-accent serif-font flex items-center gap-2">👥 人物图鉴</h2>
+                    <div class="flex gap-2">
+                        <button onclick="aiGenerateCharacter(this)" class="px-3 py-1 rounded-lg text-xs font-bold border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/10 transition-colors flex items-center gap-1">✨ AI 捏人</button>
+                        <button onclick="toggleModal('char-modal')" class="btn-ghost px-3 py-1 rounded-lg text-xs opacity-80 hover:opacity-100">+ 手搓</button>
+                    </div>
+                </div>
+                <div id="character-list" class="flex-grow overflow-y-auto grid grid-cols-1 xl:grid-cols-2 gap-3 pr-2 custom-scrollbar content-start max-h-[600px]">
+                    <div class="text-center text-sub text-xs mt-20 opacity-50 italic">暂无角色数据<br>请点击左侧“构思”生成</div>
+                </div>
+            </div>
+        </div>
+
+        <section id="section-outline" class="glass-panel rounded-3xl p-6 hidden fade-in relative transition-all border-l-4 border-l-transparent">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-6 pb-4 border-b border-[var(--panel-border)] gap-4">
+                <div class="flex items-center gap-4 w-full md:w-auto">
+                    <div class="p-2.5 bg-[var(--input-bg)] rounded-xl text-accent text-xl shadow-inner">🗺️</div>
+                    <div><h2 class="text-lg font-bold serif-font text-main">章节航图</h2><div class="text-xs text-sub mt-0.5 opacity-80">Storyline Roadmap</div></div>
+                    <div class="ml-4 flex items-center gap-2 glass-input px-3 py-1.5 rounded-lg border-0 w-auto"><span class="text-xs text-sub">目标:</span><input type="number" id="target-total-chapters" value="100" class="bg-transparent w-10 text-center text-xs font-bold focus:outline-none text-main" onchange="updateProgressUI(); saveData()"><span class="text-xs text-sub">章</span></div>
+                    <span id="chapter-progress-text" class="text-xs text-sub font-mono bg-[var(--input-bg)] px-2 py-0.5 rounded border border-[var(--panel-border)]">0/100</span>
+                </div>
+                <button onclick="generateMoreOutline()" id="btn-add-outline" class="btn-ghost px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm flex items-center gap-2 hover:bg-[var(--input-bg)]"><span>+ 延展剧情</span><div id="outline-spinner" class="hidden w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div></button>
+            </div>
+            <div class="relative min-h-[320px]">
+                <div id="outline-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-sub opacity-30 pointer-events-none"><span class="text-6xl mb-4 grayscale opacity-50">🌌</span><p class="text-xs font-bold uppercase tracking-widest">星图未绘 · 等待观测</p></div>
+                <div id="outline-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[420px] overflow-y-auto pr-2 pb-24 custom-scrollbar"></div>
+                <div class="absolute bottom-0 left-0 w-full h-28 bg-gradient-to-t from-[var(--panel-bg)] to-transparent pointer-events-none flex justify-center items-end pb-6 z-10">
+                     <button onclick="activateLoom()" class="pointer-events-auto btn-gradient text-white text-lg font-bold py-3.5 px-12 rounded-full shadow-2xl transition transform hover:-translate-y-1 flex items-center gap-3 backdrop-blur-md border border-white/10 group"><span>🚀 进入星云织机</span><span class="group-hover:translate-x-1 transition-transform">→</span></button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Nebula Loom Section with New Outline Edit Module -->
+        <section id="section-loom" class="hidden fade-in space-y-4">
+            <!-- NEW: Active Outline Editor Module -->
+            <div id="active-outline-module" class="glass-panel p-5 border-l-4 border-l-amber-500 bg-amber-500/5 transition-all relative hidden shadow-[0_0_20px_rgba(245,158,11,0.1)]">
+                <div class="flex flex-col md:flex-row justify-between items-start mb-2 gap-4">
+                    <div class="w-full">
+                        <h3 class="text-xs font-bold text-amber-400 flex items-center gap-2 uppercase tracking-widest opacity-80">
+                            <span>📌</span> 当前章节大纲 (可修订)
+                        </h3>
+                        <input type="text" id="active-outline-title" class="bg-transparent border-none text-xl font-bold text-main focus:ring-0 p-0 w-full mt-1 placeholder-white/20" placeholder="章节标题" oninput="updateActiveOutlineData()">
+                    </div>
+                    <div class="flex items-center gap-2 bg-[var(--input-bg)] px-3 py-1.5 rounded-lg border border-amber-500/30 shrink-0">
+                        <span class="text-xs text-amber-300 font-bold">🎯 强制字数:</span>
+                        <input type="text" id="active-outline-words" value="2000-3000" class="bg-transparent border-none text-xs text-amber-200 w-20 text-center focus:ring-0 p-0 font-mono font-bold" onchange="updateActiveOutlineData()">
+                    </div>
+                </div>
+                <textarea id="active-outline-desc" class="w-full bg-[var(--input-bg)] rounded-xl p-3 text-sm text-sub resize-y min-h-[80px] border border-transparent focus:border-amber-500/50 outline-none leading-relaxed" placeholder="在此修订本章大纲剧情，AI 将严格遵循此设定..." oninput="updateActiveOutlineData()"></textarea>
+            </div>
+
+            <!-- Existing Loom Panel -->
+            <div class="glass-panel rounded-3xl p-1.5 h-[80vh] flex flex-col border-t-4 border-[var(--accent-primary)] shadow-2xl" id="loom-panel">
+                <div id="loom-header" class="p-4 rounded-t-2xl flex flex-col md:flex-row justify-between items-center gap-4 bg-[var(--input-bg)] border-b border-[var(--panel-border)]">
+                    <div class="flex items-center gap-3 w-full md:w-auto">
+                        <select id="chapter-selector" class="glass-input rounded-xl px-4 py-2.5 font-bold w-full md:w-72 text-sm shadow-sm" onchange="selectChapter(this.value)"><option value="">选择章节...</option></select>
+                        <span id="current-word-count" class="text-xs text-sub mono-font whitespace-nowrap bg-[var(--panel-bg)] px-3 py-1.5 rounded-lg border border-[var(--panel-border)]">0 Words</span>
+                    </div>
+                    <div class="flex gap-2 w-full md:w-auto justify-end">
+                        <button onclick="toggleZenMode()" class="btn-ghost px-3 py-2 rounded-xl text-xs" title="Zen 模式">🧘</button>
+                        <button onclick="aiCritique()" class="btn-ghost px-4 py-2 rounded-xl shadow-sm font-bold text-sm bg-red-500/5 hover:bg-red-500/10 text-red-400 border-red-400/20">🌶️ 毒舌审稿</button>
+                        <button onclick="generateChapterText(false)" class="btn-accent px-5 py-2 rounded-xl shadow-sm font-bold text-sm">🖋️ 起笔</button>
+                        <button onclick="generateChapterText(true)" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2 rounded-xl shadow-sm font-bold text-sm flex items-center gap-1 transition-colors"><span>✒️ 续写</span></button>
+                    </div>
+                </div>
+                <div class="flex-grow relative rounded-b-2xl overflow-hidden bg-[var(--panel-bg)]">
+                    <div id="loading-overlay" class="absolute inset-0 bg-black/60 backdrop-blur-sm z-30 hidden flex flex-col items-center justify-center"><div class="animate-spin text-5xl mb-6 text-accent filter drop-shadow-[0_0_15px_var(--accent-glow)]">🛸</div><p class="text-xl font-bold serif-font text-main animate-pulse">引擎轰鸣中...</p></div>
+                    <textarea id="chapter-editor" class="w-full h-full bg-transparent p-8 md:p-20 resize-none leading-loose text-lg serif-font focus:outline-none placeholder-opacity-30 text-main" placeholder="在此处写作...&#10;选中文本可触发 AI 润色/扩写工具。" oninput="updateWordCount(); petHappy(); debounceSave()"></textarea>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="w-full py-8 mt-12 border-t border-[var(--panel-border)] bg-[var(--input-bg)] text-center text-sub text-xs">
+        <p>&copy; 2025 星云笔尖 v3.7 | Powered by DeepSeek</p>
+
+    </footer>
+
+    <!-- 弹窗: 毒舌审稿 (NEW) -->
+    <div id="critique-modal" class="fixed inset-0 z-[120] hidden">
+        <div class="absolute inset-0 bg-black/90 backdrop-blur-sm transition-opacity" onclick="toggleCritiqueModal()"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-2xl shadow-[0_0_50px_rgba(239,68,68,0.2)] border border-red-500/30 overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in duration-300">
+            <!-- Header -->
+            <div class="p-5 border-b border-red-500/20 flex justify-between items-center bg-gradient-to-r from-red-900/40 to-transparent">
+                <h3 class="text-xl font-bold text-red-200 flex items-center gap-3">
+                    <span class="text-2xl filter drop-shadow-[0_0_5px_red]">🌶️</span> 
+                    毒舌主编的审稿报告
+                </h3>
+                <button onclick="toggleCritiqueModal()" class="text-red-300 hover:text-red-100 text-2xl leading-none transition-transform hover:rotate-90">&times;</button>
+            </div>
+            <!-- Body -->
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-grow bg-[var(--input-bg)]">
+                <div id="critique-content" class="text-sm text-gray-300 leading-loose font-mono whitespace-pre-wrap"></div>
+            </div>
+            <!-- Footer -->
+            <div class="p-5 border-t border-red-500/20 bg-black/40 flex gap-3 justify-end">
+                <button onclick="copyCritique()" class="px-5 py-2.5 rounded-xl border border-red-500/30 text-red-300 hover:bg-red-500/10 text-sm font-bold transition-all flex items-center gap-2">📄 复制骂名</button>
+                <button onclick="toggleCritiqueModal()" class="btn-gradient from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 px-6 py-2.5 rounded-xl text-white font-bold text-sm shadow-[0_0_15px_rgba(225,29,72,0.4)]">😤 我接受批评</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗: 公告 -->
+    <div id="announcement-modal" class="fixed inset-0 z-[110] hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleAnnouncements()"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+            <div class="p-5 border-b border-[var(--panel-border)] flex justify-between items-center bg-[var(--input-bg)]"><h3 class="text-lg font-bold text-main">📢 星云广播</h3><button onclick="toggleAnnouncements()" class="text-sub hover:text-main text-2xl">&times;</button></div>
+            <div id="announcement-list" class="flex-grow overflow-y-auto p-5 space-y-4"></div>
+            <div class="p-5 border-t border-[var(--panel-border)] text-center bg-[var(--input-bg)]"><button onclick="markAllAsRead()" class="w-full btn-accent py-2.5 rounded-xl font-bold text-sm shadow-md">我知道了</button></div>
+        </div>
+    </div>
+
+    <!-- 弹窗: 教程 -->
+    <div id="tutorial-modal" class="fixed inset-0 z-[110] hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleTutorial()"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="p-6 border-b border-[var(--panel-border)] flex justify-between items-center bg-[var(--input-bg)]"><h3 class="text-xl font-bold serif-font text-accent flex items-center gap-2"><span>📘</span> 航行指南 (v3.0)</h3><button onclick="toggleTutorial()" class="text-sub hover:text-main text-2xl">&times;</button></div>
+            <div class="p-8 overflow-y-auto text-sm text-sub leading-relaxed tutorial-body flex-grow">
+                <h4>🚀 1. 引擎启动</h4>
+                <ul>
+                    <li><b>API Key</b>: 输入 DeepSeek Key (sk-...)。系统自动识别。</li>
+                </ul>
+                <h4>🌍 2. 世界构筑</h4>
+                <ul>
+                    <li><b>创世档案</b>: 左侧写设定，右侧看图谱。格式：<code>【父节点】</code> 或 <code>子节点：描述</code>。支持直接粘贴 Markdown 标题。</li>
+                    <li><b>星图交互</b>: 
+                        <br>• <b>PC</b>: 滚轮缩放，左键拖拽，双击居中。
+                        <br>• <b>手机</b>: 单指拖拽漫游，双指缩放/旋转。
+                    </li>
+                </ul>
+                <h4>✍️ 3. 沉浸写作</h4>
+                <ul>
+                    <li><b>章节修订模块</b>: 在织机上方，可实时修改大纲并设定<b>强制字数</b>。</li>
+                    <li><b>Zen 模式</b>: 点击 🧘 进入全屏。手机端会自动隐藏无关元素并防止键盘遮挡。</li>
+                    <li><b>毒舌审稿</b>: 点击 🌶️，让 AI 主编对当前章节进行严厉点评。</li>
+                </ul>
+                <h4>🖋️ 4. 起笔</h4>
+                <ul>
+                    <li><b>AI 起笔</b>: 点击 🖋️，让 AI 主编为你起好第一句。</li>
+                    <li><b>续写</b>: 点击 ✒️，让 AI 主编为你续写剩下的部分。</li>
+                </ul>
+                <h4>🤖 5. 机器人助手</h4>
+                <ul>
+                    <li><b>AI 助手</b>: 点击 🤖，开启 AI 助手，可与 AI 进行聊天、回答问题、提出建议。</li>
+                    <li><b>AI 润色</b>: 选中文本后，点击 AI 助手中的润色按钮，让 AI 主编为你改写。</li>
+                    <li><b>AI 扩写</b>: 选中文本后，点击 AI 助手中的扩写按钮，让 AI 主编为你生成新内容。</li>
+                </ul>
+                <h4> 快捷键</h4>
+                <ul>
+                    <code>ctrl+z可以删除除了apikey以外的输入。</code>
+                </ul>
+                <h4>🎉 6. 完成</h4>
+                <ul>
+                    <li>恭喜你完成了你的第一本星云笔尖作品！</li>
+                    <li>祝你在星云的旅途愉快！</li>
+            </div>
+            <div class="p-5 border-t border-[var(--panel-border)] text-center bg-[var(--input-bg)]"><button onclick="toggleTutorial()" class="btn-accent px-10 py-2.5 rounded-xl font-bold text-sm shadow-lg">开始创作</button></div>
+        </div>
+    </div>
+
+    <!-- 弹窗: 免责声明 -->
+    <div id="disclaimer-modal" class="fixed inset-0 z-[120] hidden">
+        <div class="absolute inset-0 bg-black/95 backdrop-blur-xl"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-2xl shadow-2xl border border-red-500/20 p-0 flex flex-col max-h-[85vh]">
+            <div class="p-6 border-b border-[var(--panel-border)] bg-[var(--input-bg)]"><h3 class="text-xl font-bold text-red-400 flex items-center gap-2"><span>⚖️</span> 免责声明 & 使用协议</h3></div>
+            <div class="p-8 overflow-y-auto text-sm text-sub space-y-5 leading-relaxed flex-grow">
+                <div class="bg-red-500/10 p-4 rounded-xl border border-red-500/20 text-red-200 font-bold">⚠️ 重要提示：使用本工具前请务必仔细阅读以下条款。</div>
+                <p><b>1. AI 生成声明：</b> 本工具生成的所有内容均由 DeepSeek 人工智能模型生成。内容具有随机性，可能包含虚构、错误或不准确的信息（幻觉）。生成内容不代表开发者立场，请用户在使用前自行核实。</p>
+                <p><b>2. 合规使用承诺：</b> 用户承诺不使用本工具生成违反法律法规、违反公序良俗、色情低俗、暴力恐怖、政治敏感或侵犯他人权益的内容。因用户不当使用产生的一切法律责任由用户自行承担。</p>
+                <p><b>3. 数据隐私与安全：</b> 本工具为<b>纯静态网页应用</b>。您的 API Key、小说设定、大纲和正文均<b>仅存储在您本地浏览器的 LocalStorage 中</b>，不会上传至本工具开发者的服务器。</p>
+                <p><b>4. 版权声明：</b> 本工具所呈现的<b>所有内容</b>（包括但不限于小说设定、大纲、正文、角色设定、插画、音乐、视频等）<b>均属于原创</b>，未经原作者许可，不得转载、修改、出版、发行、上传至任何媒体平台。任何媒体平台未经原作者许可，不得使用本工具所呈现的任何内容。</p>
+                <p><b>5. 免责条款：</b> 开发者不对因使用本工具而产生的任何直接或间接损失负责。包括但不限于数据丢失、版权纠纷等。</p>
+                <p><b>6. 其他声明：</b> 开发者保留随时修改、中止或终止本工具的权利，开发者对用户使用本工具造成的任何损失不承担任何责任。</p>
+                <p><b>7. qq联系方式：</b> 如有任何疑问或建议，请联系开发者：<a href="mailto:<EMAIL>" class="text-red-400 hover:text-red-200"><li><EMAIL>2537975460@qq.com</a></li></p>
+                <P><b>8.谷歌邮箱：</b>如有任何疑问或建议，请联系开发者：<a href="mailto:<EMAIL>" class="text-red-400 hover:text-red-200"><li>zh2335897181@gmail.com</a></li></P>
+                    <p><b>9. 微信公众号：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+                    <p><b>10. 微信号：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+                    <p><b>11. 微博：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+                    <p><b>12. 知乎：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+                    <p><b>13. 豆瓣：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+                    <p><b>14. 公众号：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+                    <p><b>15. 头条号：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+                    <p><b>16. 百度贴吧：（暂未开发）</b> 星云笔尖，欢迎关注！</p>
+            </div>
+            <div class="p-6 border-t border-[var(--panel-border)] text-center bg-[var(--input-bg)]"><button onclick="acceptDisclaimer()" class="btn-accent px-12 py-3 rounded-full font-bold shadow-xl hover:shadow-2xl transition-all hover:-translate-y-1">我已阅读并同意</button></div>
+        </div>
+    </div>
+
+    <!-- 弹窗: Reset 确认 -->
+    <div id="reset-modal" class="fixed inset-0 z-[130] hidden">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="toggleResetModal()"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-sm shadow-2xl border border-red-500/30 p-6 flex flex-col items-center text-center">
+            <div class="text-4xl mb-4">⚠️</div>
+            <h3 class="text-lg font-bold text-main mb-2">确认重置应用？</h3>
+            <p class="text-sm text-sub mb-6 leading-relaxed">此操作将清空所有设定、大纲和正文，但会 <b class="text-emerald-400">保留您的 API Key</b>。<br>操作无法撤销，建议先备份。</p>
+            <div class="flex gap-3 w-full">
+                <button onclick="toggleResetModal()" class="flex-1 btn-ghost py-2.5 rounded-xl text-sm">取消</button>
+                <button onclick="performReset()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg transition-colors">确认重置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗: 标签选择器 -->
+    <div id="tag-selector-modal" class="fixed inset-0 z-[120] hidden">
+        <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="toggleTagSelector()"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div class="p-5 border-b border-[var(--panel-border)] flex justify-between items-center bg-[var(--input-bg)]"><h3 class="text-lg font-bold text-main flex items-center gap-2"><span class="text-xl">🏷️</span> 标签全书</h3><button onclick="toggleTagSelector()" class="text-sub hover:text-main text-2xl leading-none">&times;</button></div>
+            <div class="p-6 overflow-y-auto custom-scrollbar flex-grow bg-[var(--panel-bg)]" id="tag-list-container"></div>
+            <div class="p-4 border-t border-[var(--panel-border)] bg-[var(--input-bg)] flex flex-col sm:flex-row gap-3">
+                <div class="flex flex-1 gap-2"><input type="text" id="custom-tag-input" class="glass-input rounded-xl px-4 text-sm flex-grow" placeholder="输入自定义标签..."><button onclick="addCustomTag()" class="btn-ghost px-5 rounded-xl text-sm font-bold">添加</button></div>
+                <button onclick="aiBrainstormTags()" class="btn-accent px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 justify-center shadow-lg"><span>✨ AI 帮我想</span></button>
+                <button onclick="toggleTagSelector()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-xl font-bold text-sm">完成</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 弹窗: 角色 -->
+    <div id="char-modal" class="fixed inset-0 z-[110] hidden">
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="toggleModal('char-modal')"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl p-8 w-11/12 max-w-md shadow-2xl">
+            <h3 class="text-xl font-bold mb-6 serif-font text-main">创造新角色</h3>
+            <div class="space-y-4">
+                <input type="text" id="new-char-name" placeholder="姓名" class="glass-input w-full rounded-xl px-4 py-3 text-sm">
+                <input type="text" id="new-char-role" placeholder="定位 (如: 主角)" class="glass-input w-full rounded-xl px-4 py-3 text-sm">
+                <input type="text" id="new-char-tags" placeholder="标签 (逗号分隔)" class="glass-input w-full rounded-xl px-4 py-3 text-sm">
+                <textarea id="new-char-desc" placeholder="简述" class="glass-input w-full rounded-xl px-4 py-3 text-sm h-24"></textarea>
+            </div>
+            <div class="flex gap-4 mt-8">
+                <button onclick="addManualCharacter()" class="flex-1 btn-accent py-2.5 rounded-xl font-bold text-sm shadow-lg">保存</button>
+                <button onclick="toggleModal('char-modal')" class="flex-1 btn-ghost py-2.5 rounded-xl text-sm">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
