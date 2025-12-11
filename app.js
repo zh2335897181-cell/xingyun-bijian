@@ -1071,21 +1071,136 @@ async function aiGenerateCharacter(btn) {
     }
 }
 // --- 修改结束 ---
+// --- 修改后的剧情延展逻辑 (严格计数 + 上下文强关联) ---
 async function generateMoreOutline() { 
-    const c=store.outline.length; const t=parseInt(document.getElementById('target-total-chapters').value); 
-    if(c>=t) return showToast("已达目标","info"); 
-    const btn=document.getElementById('btn-add-outline'); const s=document.getElementById('outline-spinner'); 
-    btn.disabled=true; btn.querySelector('span').innerText="推演中..."; s.classList.remove('hidden'); 
+    // 1. 获取状态与目标
+    const currentCount = store.outline.length; 
+    const targetTotal = parseInt(document.getElementById('target-total-chapters').value) || 100; 
     
-    // Fix: Add safe check for store.tags
-    const ts=(store.tags && store.tags.length>0)?`风格标签：${store.tags.join(', ')}`:""; 
+    if(currentCount >= targetTotal) return showToast("已达目标章节数", "info"); 
+
+    // 2. UI 锁定
+    const btn = document.getElementById('btn-add-outline'); 
+    const spinner = document.getElementById('outline-spinner'); 
+    const originalText = "<span>+ 延展剧情</span>"; // 记录原始按钮文本结构
     
+    btn.disabled = true; 
+    btn.querySelector('span').innerText = "AI 正在推演..."; 
+    spinner.classList.remove('hidden'); 
+    
+    // 3. 准备基础信息
+    const tags = (store.tags && store.tags.length > 0) ? `风格标签：${store.tags.join(', ')}` : ""; 
+    const charInfo = store.characters.map(c => `${c.name}(${c.role})`).join('、');
+    
+    // 计算本次生成的范围 (默认一次生成 10 章，或者直到填满目标)
+    const BATCH_SIZE = 10;
+    const nextStart = currentCount + 1;
+    const nextEnd = Math.min(currentCount + BATCH_SIZE, targetTotal);
+    const countToGen = nextEnd - nextStart + 1;
+
     try { 
-        const l=c>0?JSON.stringify(store.outline.slice(-5)):"无"; 
-        const p=`我是大纲策划。核心：${store.concept}。世界观：${store.lore}。${ts}。角色：${JSON.stringify(store.characters.map(x=>x.name))}。生成第${c+1}到${Math.min(c+10,t)}章大纲。紧接：${l}。格式：[{"title":"标题","desc":"剧情"}]。IMPORTANT: RETURN RAW JSON ARRAY ONLY. NO MARKDOWN.`; 
-        const r=await callAI([{role:"system",content:p},{role:"user",content:"生成"}]); 
-        cleanJson(r).forEach((x,i)=>store.outline.push({id:c+i+1, title:x.title, desc:x.desc})); renderOutline(); saveData(); showToast(`成功延展`, "success"); 
-    } catch(e){ showToast(e.message,"error"); } finally{ btn.disabled=false; btn.querySelector('span').innerText="+ 延展剧情"; s.classList.add('hidden'); } 
+        let systemPrompt = "";
+        let userPrompt = "";
+
+        const formatInstruction = `
+        【必须返回纯 JSON 数组 (NO MARKDOWN)】
+        格式示例：
+        [
+            {"title": "第一章 少年出山", "desc": "主角在山上练剑..."},
+            {"title": "第二章 初入江湖", "desc": "主角下山遇到了..."}
+        ]`;
+
+        if (currentCount === 0) {
+            // --- 场景 A：从零开始 (前10章) ---
+            // 重点：阅读梗概
+            systemPrompt = `你是一个专业的网文大纲策划。
+            
+            【核心设定】
+            书名/梗概：${store.concept}
+            世界观：${store.lore}
+            ${tags}
+            主要角色：${charInfo}
+            
+            【任务】
+            请根据核心梗概，从零开始构思前 ${countToGen} 章的详细大纲。
+            
+            【要求】
+            1. 严格按照梗概设定展开，节奏紧凑，黄金三章要有爆点。
+            2. **必须严格生成 ${countToGen} 个章节**，不多也不少。
+            3. 输出 JSON 格式。`;
+
+            userPrompt = `请生成第 1 章到第 ${countToGen} 章的大纲。${formatInstruction}`;
+
+        } else {
+            // --- 场景 B：剧情延展 (续写) ---
+            // 重点：阅读前文大纲，保持连贯
+            
+            // 获取最近 10 章的大纲作为上下文 (避免 token 溢出，取最近的足矣)
+            const contextSize = 10;
+            const recentOutlines = store.outline.slice(-contextSize).map(ch => 
+                `第${ch.id}章：${ch.title}\n剧情：${ch.desc}`
+            ).join('\n\n');
+
+            systemPrompt = `你是一个专业的网文大纲策划。
+            
+            【核心设定】
+            核心梗概：${store.concept}
+            ${tags}
+            
+            【当前剧情进度 (Context)】
+            以下是最近 ${Math.min(currentCount, contextSize)} 章的剧情，请仔细阅读：
+            ----------------
+            ${recentOutlines}
+            ----------------
+            
+            【任务】
+            请严格承接上述剧情，继续推演接下来的 ${countToGen} 章大纲。
+            
+            【要求】
+            1. **逻辑连贯**：严格遵循前文的故事线发展，承接伏笔，严禁剧情断层或吃书。
+            2. **必须严格生成 ${countToGen} 个章节** (从第 ${nextStart} 章 到 第 ${nextEnd} 章)。
+            3. 输出 JSON 格式。`;
+
+            userPrompt = `请继续生成第 ${nextStart} 章到第 ${nextEnd} 章的大纲。${formatInstruction}`;
+        }
+
+        // 4. 调用 AI
+        const res = await callAI([
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+        ]); 
+
+        // 5. 数据处理
+        const newChapters = cleanJson(res);
+        
+        if (!Array.isArray(newChapters)) throw new Error("AI 返回格式错误，请重试");
+
+        // 写入 Store
+        newChapters.forEach((ch, index) => {
+            store.outline.push({
+                id: currentCount + index + 1, // 确保 ID 连续
+                title: ch.title, 
+                desc: ch.desc,
+                targetWords: store.defaultWordCount || '2000-3000'
+            });
+        }); 
+
+        renderOutline(); 
+        saveData(); 
+        showToast(`成功延展 ${newChapters.length} 章剧情`, "success"); 
+        
+        // 自动滚动到底部
+        const container = document.getElementById('outline-container');
+        if(container) container.scrollTop = container.scrollHeight;
+
+    } catch(e) { 
+        console.error(e);
+        showToast("大纲生成失败: " + e.message, "error"); 
+    } finally { 
+        btn.disabled = false; 
+        btn.querySelector('span').innerHTML = "+ 延展剧情"; 
+        spinner.classList.add('hidden'); 
+    } 
 }
 
 function insertLoreTemplate(type) { const t={'等级体系':'\n【力量等级】\n1. 凡境：练气、筑基\n2. 灵境：元婴、化神','地理环境':'\n【世界地图】\n东域：修仙宗门\n西漠：魔修','势力组织':'\n【主要势力】\n天道宗：正道\n血煞门：反派'}; document.getElementById('novel-lore').value+=t[type]||''; if(loreViewMode==='graph') parseLoreToGraph(); debounceSave(); }
