@@ -1,9 +1,9 @@
 // --- 粒子系统 & Canvas (Defined First) ---
-
-// --- IndexedDB 系统 (新增) ---
+// --- IndexedDB 核心系统 (修复版 v2) ---
+// 解决存储空间限制，实现异步存取，消除打字卡顿
 const DB_CONFIG = {
     name: 'NebulaQuillDB',
-    version: 1,
+    version: 2, // 🔴以此强制触发升级，修复结构错误
     storeName: 'novel_data'
 };
 
@@ -15,9 +15,12 @@ const idb = {
             req.onsuccess = () => resolve(req.result);
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
-                if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
-                    db.createObjectStore(DB_CONFIG.storeName, { keyPath: 'id' });
+                // 🔴 如果存在旧的 store，先删除，防止结构冲突
+                if (db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                    db.deleteObjectStore(DB_CONFIG.storeName);
                 }
+                // 重新创建带 keyPath 的 store
+                db.createObjectStore(DB_CONFIG.storeName, { keyPath: 'id' });
             };
         });
     },
@@ -26,10 +29,16 @@ const idb = {
         return new Promise((resolve, reject) => {
             const tx = db.transaction(DB_CONFIG.storeName, 'readwrite');
             const store = tx.objectStore(DB_CONFIG.storeName);
-            // 我们只存一条核心数据，ID固定为 'main'
-            const req = store.put({ id: 'main', ...data });
+            // 存入固定ID 'main'
+            // 为了防止 data 本身是 Proxy 或特殊对象，建议深拷贝一次或解构
+            // 同时确保 data 里没有名为 id 的冲突字段（或者覆盖它）
+            const safeData = JSON.parse(JSON.stringify(data)); 
+            const req = store.put({ ...safeData, id: 'main' });
             req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
+            req.onerror = () => {
+                console.error("IndexedDB Put Error:", req.error);
+                reject(req.error);
+            };
         });
     },
     get: async () => {
@@ -41,9 +50,18 @@ const idb = {
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
         });
+    },
+    clear: async () => {
+        const db = await idb.open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(DB_CONFIG.storeName, 'readwrite');
+            const store = tx.objectStore(DB_CONFIG.storeName);
+            const req = store.clear();
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
     }
 };
-
 
 
 class Particle { 
