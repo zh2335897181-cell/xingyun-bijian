@@ -485,41 +485,63 @@ function detectEngine() {
     debounceSave(); 
 }
 
-// --- 修改开始：更强壮的 JSON 清洗函数 ---
 function cleanJson(text) {
     console.log("AI Raw Response:", text); // 方便调试
 
-    // 1. 优先尝试匹配 Markdown 代码块
+    let content = text;
+    // 1. 尝试移除 Markdown 标记 (保留原有逻辑)
     const m = text.match(/```json\s*([\s\S]*?)\s*```/) || text.match(/```\s*([\s\S]*?)\s*```/);
-    if (m) {
-        try { return JSON.parse(m[1]); } catch (e) {}
-    }
+    if (m) content = m[1];
 
-    // 2. 智能提取最外层的 JSON 结构 (Array 或 Object)
-    const firstOpenBracket = text.indexOf('[');
-    const firstOpenBrace = text.indexOf('{');
+    // 2. 智能提取最外层的 JSON 结构 (保留原有逻辑，稍微增强)
+    const firstOpenBracket = content.indexOf('[');
+    const firstOpenBrace = content.indexOf('{');
     
     let start = -1;
     let end = -1;
 
-    // 判断是谁在前面（是数组还是对象）
+    // 判断是数组还是对象
     if (firstOpenBracket !== -1 && (firstOpenBrace === -1 || firstOpenBracket < firstOpenBrace)) {
         start = firstOpenBracket;
-        end = text.lastIndexOf(']');
+        end = content.lastIndexOf(']');
     } else if (firstOpenBrace !== -1) {
         start = firstOpenBrace;
-        end = text.lastIndexOf('}');
+        end = content.lastIndexOf('}');
     }
 
     if (start !== -1 && end !== -1 && end > start) {
-        try {
-            return JSON.parse(text.substring(start, end + 1));
-        } catch (e) {
-            console.error("JSON Parse Failed:", e);
-        }
+        content = content.substring(start, end + 1);
     }
 
-    throw new Error("AI 返回数据格式错误: 无法解析 JSON");
+    // 3. 尝试解析与修复
+    try {
+        return JSON.parse(content);
+    } catch (e) {
+        console.warn("初次解析失败，尝试智能修复 JSON...", e);
+        
+        let fixed = content;
+
+        // 【修复策略 1】补全对象之间丢失的逗号
+        // 情况：...} { "title"...  -> ...}, { "title"...
+        fixed = fixed.replace(/}\s*{/g, '},{');
+        
+        // 【修复策略 2】补全丢失的闭合括号 (针对你遇到的报错)
+        // 情况：..."内容..." { "title"... -> ..."内容..."}, { "title"...
+        // 原理：如果双引号后直接跟了左大括号，说明上一个对象没闭合
+        fixed = fixed.replace(/\"\s*\n?\s*\{/g, '"},{');
+
+        // 【修复策略 3】移除数组末尾多余的逗号
+        // 情况：...}, ] -> ...} ]
+        fixed = fixed.replace(/,\s*]/g, ']');
+
+        try {
+            console.log("修复后的 JSON:", fixed);
+            return JSON.parse(fixed);
+        } catch (e2) {
+            console.error("修复后解析仍失败:", e2);
+            throw new Error("AI 生成数据格式严重错误，请点击重试 (Parse Error)");
+        }
+    }
 }
 // --- 修改结束 ---
 // --- AI Call Logic (DeepSeek) ---
