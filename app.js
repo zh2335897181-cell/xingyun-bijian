@@ -159,6 +159,19 @@ function setLoreView(mode) {
     }
 }
 
+// ✅ 添加以下两个函数：
+
+function toggleRefreshModal() {
+    document.getElementById('refresh-modal').classList.toggle('hidden');
+}
+
+function performRefresh() {
+    // 1. 清除所有本地存储（包括 API Key、小说内容、设置等）
+    localStorage.clear();
+    // 2. 重新加载页面
+    location.reload();
+}
+
 function parseLoreToGraph() {
     const text = document.getElementById('novel-lore').value;
     const lines = text.split('\n');
