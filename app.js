@@ -1057,31 +1057,107 @@ function updateActiveOutlineData() {
     }
 }
 
+// --- 修改后的正文生成逻辑 (增强版：先点名，后开拍) ---
 async function generateChapterText(cont) { 
-    const id=store.currentChapterId; if(!id) return showToast("选章节","error"); 
-    const ch=store.outline.find(x=>x.id==id); const ed=document.getElementById('chapter-editor'); 
-    const pnl=document.getElementById('loom-panel'); pnl.classList.add('generating-glow'); 
-    const spin=document.getElementById('loading-overlay'); if(spin) { spin.classList.remove('hidden'); spin.querySelector('p').innerText="AI 正在奋笔疾书..."; } 
+    const id = store.currentChapterId; 
+    if(!id) return showToast("请先选择章节","error"); 
     
-    // Fix: Safe check for store.tags
-    const ts=(store.tags && store.tags.length>0)?`风格：${store.tags.join(', ')}`:""; 
-    const mp="长篇网文风格"; 
-    // Use specific target words if available
+    const ch = store.outline.find(x => x.id == id); 
+    const ed = document.getElementById('chapter-editor'); 
+    const pnl = document.getElementById('loom-panel'); 
+    
+    pnl.classList.add('generating-glow'); 
+    const spin = document.getElementById('loading-overlay'); 
+    if(spin) { 
+        spin.classList.remove('hidden'); 
+        spin.querySelector('p').innerText = "AI 正在分析大纲并调度演员..."; 
+    } 
+    
+    // 基础配置
+    const ts = (store.tags && store.tags.length > 0) ? `风格标签：${store.tags.join(', ')}` : ""; 
+    const mp = "长篇网文沉浸模式"; 
     const wordTarget = ch.targetWords || "2000-3000";
     
     try { 
-        // Fix: Safe check for individual character tags (x.tags||[])
-        let msg=[]; const l=store.lore; const cs=store.characters.map(x=>`${x.name}(${(x.tags||[]).join(',')})`).join(';'); 
+        // 1. 构建精细化的“VIP 角色花名册”
+        // 格式： • 姓名 [定位] (标签) - 简述
+        const cs = store.characters.map(x => {
+            const role = x.role ? `[${x.role}]` : "";
+            const tags = (x.tags && x.tags.length) ? `(${x.tags.join(',')})` : "";
+            const desc = x.desc ? ` - ${x.desc.substring(0, 60)}` : ""; // 增加描述长度，让AI更懂角色
+            return `• ${x.name} ${role} ${tags}${desc}`;
+        }).join('\n');
+
+        // 2. 核心指令：强制执行“先审视，后写作”的逻辑
+        const instructions = `
+【关键：写作前的“选角”步骤】
+在开始写正文之前，请务必执行以下思维过程：
+1. **审视大纲**：分析本章大纲发生的事件、地点。
+2. **VIP 点名**：遍历下方的【VIP角色列表】，逻辑判断**谁应该出现在这个场景里**？
+   - 如果某角色是大纲提到的，必须重笔墨描写。
+   - 如果某角色逻辑上应该在场（如主角的跟班、贴身保镖），即使大纲没提，也**必须让他出场**，不能让他“隐身”。
+3. **龙套补位**：如果剧情需要路人甲、店小二、炮灰反派，请**直接即兴创作**（不要硬套VIP角色），这些龙套无需出现在设定集里。
+
+【写作要求】
+- 严禁让VIP角色变成毫无存在感的背景板。
+- 严禁出现“花名册”里没有的“重要角色”（除非是新登场的神秘人）。
+- 直接输出正文，不要输出你的思考过程。
+`;
+
+        let msg = []; 
+        const l = store.lore || "暂无特殊世界观设定"; 
+        
         if(cont){ 
-            const ctx=ed.value.slice(-1500); 
-            msg=[{role:"system",content:`续写。${mp} ${ts}。设定:${store.concept}。人物:${cs}。章纲:${ch.desc}。字数要求:${wordTarget}字。`},{role:"user",content:`上文:${ctx}\n续写800字。`}]; 
+            // 续写模式
+            const ctx = ed.value.slice(-1500); 
+            msg = [
+                {
+                    role: "system", 
+                    content: `你是一个资深网文作家。${mp}。${ts}。
+                    ${instructions}
+                    字数要求: 续写约 ${parseInt(wordTarget)/3} 字。`
+                },
+                {
+                    role: "user", 
+                    content: `【世界观】\n${l}\n\n【VIP 角色列表 (请从中选角)】\n${cs}\n\n【本章大纲】\n${ch.desc}\n\n【上文情境】\n...${ctx}\n\n请根据上文逻辑，继续书写：`
+                }
+            ]; 
         } else { 
-            msg=[{role:"system",content:`网文作家。${mp} ${ts}。将大纲扩写为正文。Show don't tell。字数要求:${wordTarget}字。`},{role:"user",content:`世界观:${l}。人物:${cs}。章节:${ch.title}\n大纲:${ch.desc}\n请开始:`}]; 
+            // 起笔模式
+            msg = [
+                {
+                    role: "system", 
+                    content: `你是一个资深网文作家。${mp}。${ts}。
+                    请将简略的大纲扩写为细节丰富的正文。Show don't tell。
+                    ${instructions}
+                    字数要求: 本次生成约 ${wordTarget} 字。`
+                },
+                {
+                    role: "user", 
+                    content: `【世界观】\n${l}\n\n【VIP 角色列表 (请从中选角)】\n${cs}\n\n【本章标题】\n${ch.title}\n\n【本章大纲】\n${ch.desc}\n\n请开始正文创作：`
+                }
+            ]; 
         } 
+        
         if(spin) spin.classList.add('hidden'); 
-        await callAI(msg, (c) => { ed.value+=c; ed.scrollTop=ed.scrollHeight; updateWordCount(); }); 
-        store.chapterTexts[id]=ed.value; saveData(); renderOutline(); 
-    } catch(e){ showToast(e.message,"error"); } finally{ if(pnl) pnl.classList.remove('generating-glow'); if(spin) spin.classList.add('hidden'); } 
+        
+        // 调用 AI
+        await callAI(msg, (c) => { 
+            ed.value += c; 
+            ed.scrollTop = ed.scrollHeight; 
+            updateWordCount(); 
+        }); 
+        
+        store.chapterTexts[id] = ed.value; 
+        saveData(); 
+        renderOutline(); 
+        
+    } catch(e) { 
+        showToast("生成失败: " + e.message, "error"); 
+    } finally { 
+        if(pnl) pnl.classList.remove('generating-glow'); 
+        if(spin) spin.classList.add('hidden'); 
+    } 
 }
 
 async function aiBrainstormTags() { const p=document.getElementById('novel-prompt').value; if(!p) return showToast("请输入梗概后再使用哦~么么哒~", "info"); showToast("分析中...", "info"); try { const r=await callAI([{role:'user', content:`基于梗概推荐5-8个标签。JSON数组格式。梗概：${p}`}]); const t=cleanJson(r); if(Array.isArray(t)) { let c=0; t.forEach(x=>{if(!store.tags.includes(x)){store.tags.push(x);c++;}}); renderSelectedTags(); renderTagSelector(); saveData(); showToast(`添加 ${c} 个标签`, "success"); } } catch(e) { showToast(e.message, "error"); } }
