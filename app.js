@@ -1145,7 +1145,7 @@ async function generateChapterText(cont) {
     
     // 基础配置
     const ts = (store.tags && store.tags.length > 0) ? `风格标签：${store.tags.join(', ')}` : ""; 
-    const mp = "长篇网文沉浸模式"; 
+    const mp = "中篇网文沉浸模式"; 
     const wordTarget = ch.targetWords || "2000-3000";
     
     try { 
@@ -1164,7 +1164,7 @@ async function generateChapterText(cont) {
             const prevText = store.chapterTexts[prevId] || "";
             if (prevText.length > 0) {
                 // 截取上一章最后 500 字作为上下文，确保连贯性且不超 Token
-                prevChapterContext = `\n【上一章剧情回顾 (Context)】\n...${prevText.slice(-500)}\n(上章完)\n`;
+                prevChapterContext = `\n【上一章剧情回顾 (Context)】\n...${prevText.slice(-5000)}\n(上章完)\n`;
             }
         }
 
@@ -1190,7 +1190,7 @@ async function generateChapterText(cont) {
                     content: `你是一个资深网文作家。${mp}。${ts}。
                     ${instructions}
                     字数要求: 续写约 ${parseInt(wordTarget)/3} 字。
-                    请注意：你正在进行章节内的【续写】。请阅读【上一章】和【当前正文】，确保逻辑严丝合缝。`
+                    请注意：你正在进行章节内的【续写】。请阅读【上一章】和【当前正文】，确保逻辑严丝合缝，且续写的字数不可以超过3500字。`
                 },
                 {
                     role: "user", 
