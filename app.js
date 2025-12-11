@@ -1124,11 +1124,15 @@ function updateActiveOutlineData() {
 }
 
 // --- 修改后的正文生成逻辑 (增强版：先点名，后开拍) ---
+// --- 修改后的正文生成逻辑 (增强版：加入上一章上下文 + 强关联大纲) ---
 async function generateChapterText(cont) { 
     const id = store.currentChapterId; 
     if(!id) return showToast("请先选择章节","error"); 
     
-    const ch = store.outline.find(x => x.id == id); 
+    // 1. 获取当前章节信息 & 索引
+    const chIndex = store.outline.findIndex(x => x.id == id);
+    const ch = store.outline[chIndex];
+    
     const ed = document.getElementById('chapter-editor'); 
     const pnl = document.getElementById('loom-panel'); 
     
@@ -1136,7 +1140,7 @@ async function generateChapterText(cont) {
     const spin = document.getElementById('loading-overlay'); 
     if(spin) { 
         spin.classList.remove('hidden'); 
-        spin.querySelector('p').innerText = "AI 正在分析大纲并调度演员..."; 
+        spin.querySelector('p').innerText = "AI 正在回溯上一章剧情并构思..."; 
     } 
     
     // 基础配置
@@ -1145,51 +1149,57 @@ async function generateChapterText(cont) {
     const wordTarget = ch.targetWords || "2000-3000";
     
     try { 
-        // 1. 构建精细化的“VIP 角色花名册”
-        // 格式： • 姓名 [定位] (标签) - 简述
+        // 2. 构建精细化的“VIP 角色花名册”
         const cs = store.characters.map(x => {
             const role = x.role ? `[${x.role}]` : "";
             const tags = (x.tags && x.tags.length) ? `(${x.tags.join(',')})` : "";
-            const desc = x.desc ? ` - ${x.desc.substring(0, 60)}` : ""; // 增加描述长度，让AI更懂角色
+            const desc = x.desc ? ` - ${x.desc.substring(0, 60)}` : ""; 
             return `• ${x.name} ${role} ${tags}${desc}`;
         }).join('\n');
 
-        // 2. 核心指令：强制执行“先审视，后写作”的逻辑
-        const instructions = `
-【关键：写作前的“选角”步骤】
-在开始写正文之前，请务必执行以下思维过程：
-1. **审视大纲**：分析本章大纲发生的事件、地点。
-2. **VIP 点名**：遍历下方的【VIP角色列表】，逻辑判断**谁应该出现在这个场景里**？
-   - 如果某角色是大纲提到的，必须重笔墨描写。
-   - 如果某角色逻辑上应该在场（如主角的跟班、贴身保镖），即使大纲没提，也**必须让他出场**，不能让他“隐身”。
-3. **龙套补位**：如果剧情需要路人甲、店小二、炮灰反派，请**直接即兴创作**（不要硬套VIP角色），这些龙套无需出现在设定集里。
+        // 3. 【核心修改】获取上一章内容的上下文
+        let prevChapterContext = "";
+        if (chIndex > 0) {
+            const prevId = store.outline[chIndex - 1].id;
+            const prevText = store.chapterTexts[prevId] || "";
+            if (prevText.length > 0) {
+                // 截取上一章最后 500 字作为上下文，确保连贯性且不超 Token
+                prevChapterContext = `\n【上一章剧情回顾 (Context)】\n...${prevText.slice(-500)}\n(上章完)\n`;
+            }
+        }
 
-【写作要求】
-- 严禁让VIP角色变成毫无存在感的背景板。
-- 严禁出现“花名册”里没有的“重要角色”（除非是新登场的神秘人）。
-- 直接输出正文，不要输出你的思考过程。
+        const instructions = `
+【关键：剧情连贯性要求】
+1. **承上**：必须紧密承接【上一章剧情回顾】的结尾，保持时间线、地点和人物状态的连续性。
+2. **启下**：严格遵循【本章大纲】的剧情走向进行展开。
+3. **选角**：根据大纲和上文，判断哪些【VIP角色】应当在场，拒绝背景板。
 `;
 
         let msg = []; 
         const l = store.lore || "暂无特殊世界观设定"; 
+        const currentText = ed.value;
         
         if(cont){ 
-            // 续写模式
-            const ctx = ed.value.slice(-1500); 
+            // --- 续写模式 (Continue) ---
+            // 上下文 = 上一章结尾 + 当前编辑器里的内容
+            const currentCtx = currentText.slice(-2000); // 取当前正在写的最后一段
+            
             msg = [
                 {
                     role: "system", 
                     content: `你是一个资深网文作家。${mp}。${ts}。
                     ${instructions}
-                    字数要求: 续写约 ${parseInt(wordTarget)/3} 字。`
+                    字数要求: 续写约 ${parseInt(wordTarget)/3} 字。
+                    请注意：你正在进行章节内的【续写】。请阅读【上一章】和【当前正文】，确保逻辑严丝合缝。`
                 },
                 {
                     role: "user", 
-                    content: `【世界观】\n${l}\n\n【VIP 角色列表 (请从中选角)】\n${cs}\n\n【本章大纲】\n${ch.desc}\n\n【上文情境】\n...${ctx}\n\n请根据上文逻辑，继续书写：`
+                    content: `【世界观】\n${l}\n\n【VIP 角色列表】\n${cs}\n${prevChapterContext}\n【本章大纲 (指导方向)】\n${ch.desc}\n\n【当前正文 (已写部分)】\n...${currentCtx}\n\n请紧接【当前正文】的断点，结合【上一章】的伏笔与【本章大纲】，继续书写：`
                 }
             ]; 
         } else { 
-            // 起笔模式
+            // --- 起笔模式 (Start) ---
+            // 上下文 = 上一章结尾
             msg = [
                 {
                     role: "system", 
@@ -1200,7 +1210,7 @@ async function generateChapterText(cont) {
                 },
                 {
                     role: "user", 
-                    content: `【世界观】\n${l}\n\n【VIP 角色列表 (请从中选角)】\n${cs}\n\n【本章标题】\n${ch.title}\n\n【本章大纲】\n${ch.desc}\n\n请开始正文创作：`
+                    content: `【世界观】\n${l}\n\n【VIP 角色列表】\n${cs}\n${prevChapterContext}\n【本章标题】\n${ch.title}\n\n【本章大纲】\n${ch.desc}\n\n请承接【上一章剧情回顾】，正式开启本章的正文创作：`
                 }
             ]; 
         } 
