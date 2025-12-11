@@ -565,7 +565,7 @@ async function aiAssist(type) {
     const toolbar = document.getElementById('ai-toolbar'); toolbar.classList.remove('visible');
     let prompt = ""; if(type === 'polish') prompt = "请润色以下段落，使其文笔更优美："; if(type === 'expand') prompt = "请扩写以下段落，增加细节："; if(type === 'shorten') prompt = "请精简以下段落："; if(type === 'synonym') prompt = "请重写以下句子：";
     showToast("AI 正在施法...", "info");
-    try { const res = await callAI([{role: "system", content: "你是一个专业的文学编辑。直接返回修改后的文本。"}, {role: "user", content: `${prompt}\n\n"${currentSelectionRange.text}"`}]); const editor = document.getElementById('chapter-editor'); editor.setRangeText(res, currentSelectionRange.start, currentSelectionRange.end, 'select'); showToast("修改完成", "success"); updateWordCount(); saveData(); } catch(e) { showToast("辅助失败: " + e.message, "error"); }
+    try { const res = await callAI([{role: "system", content: "你是番茄免费小说的资深作家。直接返回修改后的文本。"}, {role: "user", content: `${prompt}\n\n"${currentSelectionRange.text}"`}]); const editor = document.getElementById('chapter-editor'); editor.setRangeText(res, currentSelectionRange.start, currentSelectionRange.end, 'select'); showToast("修改完成", "success"); updateWordCount(); saveData(); } catch(e) { showToast("辅助失败: " + e.message, "error"); }
 }
 function toggleZenMode() { document.body.classList.toggle('zen-mode'); if(document.body.classList.contains('zen-mode')) showToast("已进入禅模式", "info"); }
 
@@ -1302,10 +1302,10 @@ async function generateChapterText(cont) {
             msg = [
                 {
                     role: "system", 
-                    content: `你是一个资深网文作家。${mp}。${ts}。
+                    content: `你是一个资深番茄小说网文作家。${mp}。${ts}。
                     ${instructions}
-                    字数要求: 续写约 ${parseInt(wordTarget)/3} 字。
-                    请注意：你正在进行章节内的【续写】。请阅读【上一章】和【当前正文】，确保逻辑严丝合缝，且续写的字数不可以超过3500字。`
+                    字数要求:请你作为一个番茄小说的资深网文作家 续写约 ${parseInt(wordTarget)/3} 字。
+                    请注意：你正在进行章节内的【续写】。请阅读【上一章】和【当前正文】，确保逻辑严丝合缝，且续写的字数不可以超过3000字。`
                 },
                 {
                     role: "user", 
@@ -1318,7 +1318,7 @@ async function generateChapterText(cont) {
             msg = [
                 {
                     role: "system", 
-                    content: `你是一个资深网文作家。${mp}。${ts}。
+                    content: `你是一个资深番茄小说网文作家。${mp}。${ts}。
                     请将简略的大纲扩写为细节丰富的正文。Show don't tell。
                     ${instructions}
                     字数要求: 本次生成约 ${wordTarget} 字。`
