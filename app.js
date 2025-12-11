@@ -1,9 +1,10 @@
 // --- 粒子系统 & Canvas (Defined First) ---
-// --- IndexedDB 核心系统 (修复版 v2) ---
-// 解决存储空间限制，实现异步存取，消除打字卡顿
+// --- IndexedDB 核心系统 (最终修复版) ---
+// 1. 改了数据库名字 (V3)，强制浏览器创建新库，避开旧库的结构错误
+// 2. 依然包含自动迁移功能
 const DB_CONFIG = {
-    name: 'NebulaQuillDB',
-    version: 2, // 🔴以此强制触发升级，修复结构错误
+    name: 'NebulaQuillDB_V3', // 🔴 改名了！这会强制创建一个全新的数据库
+    version: 1,
     storeName: 'novel_data'
 };
 
@@ -11,45 +12,64 @@ const idb = {
     open: () => {
         return new Promise((resolve, reject) => {
             const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
-            req.onerror = () => reject(req.error);
+            
+            req.onerror = () => {
+                console.error("DB Open Error:", req.error);
+                reject(req.error);
+            };
+
             req.onsuccess = () => resolve(req.result);
+
+            // 这是创建数据库结构的关键步骤
             req.onupgradeneeded = (e) => {
                 const db = e.target.result;
-                // 🔴 如果存在旧的 store，先删除，防止结构冲突
+                // 如果旧表存在（理论上新库不会有），先删除
                 if (db.objectStoreNames.contains(DB_CONFIG.storeName)) {
                     db.deleteObjectStore(DB_CONFIG.storeName);
                 }
-                // 重新创建带 keyPath 的 store
+                // 🔴 关键：创建带主键 'id' 的表
                 db.createObjectStore(DB_CONFIG.storeName, { keyPath: 'id' });
             };
         });
     },
     put: async (data) => {
-        const db = await idb.open();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(DB_CONFIG.storeName, 'readwrite');
-            const store = tx.objectStore(DB_CONFIG.storeName);
-            // 存入固定ID 'main'
-            // 为了防止 data 本身是 Proxy 或特殊对象，建议深拷贝一次或解构
-            // 同时确保 data 里没有名为 id 的冲突字段（或者覆盖它）
-            const safeData = JSON.parse(JSON.stringify(data)); 
-            const req = store.put({ ...safeData, id: 'main' });
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => {
-                console.error("IndexedDB Put Error:", req.error);
-                reject(req.error);
-            };
-        });
+        try {
+            const db = await idb.open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(DB_CONFIG.storeName, 'readwrite');
+                const store = tx.objectStore(DB_CONFIG.storeName);
+                
+                // 深拷贝数据，防止对象引用问题
+                const safeData = JSON.parse(JSON.stringify(data));
+                
+                // 🔴 确保写入的数据里包含 id: 'main'
+                const req = store.put({ ...safeData, id: 'main' });
+                
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => {
+                    console.error("DB Put Error:", req.error);
+                    reject(req.error);
+                };
+            });
+        } catch (err) {
+            console.error("IDB Put Exception:", err);
+            throw err;
+        }
     },
     get: async () => {
-        const db = await idb.open();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(DB_CONFIG.storeName, 'readonly');
-            const store = tx.objectStore(DB_CONFIG.storeName);
-            const req = store.get('main');
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
+        try {
+            const db = await idb.open();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(DB_CONFIG.storeName, 'readonly');
+                const store = tx.objectStore(DB_CONFIG.storeName);
+                const req = store.get('main');
+                
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        } catch (err) {
+            return null; // 如果出错（比如库不存在），返回 null 触发迁移逻辑
+        }
     },
     clear: async () => {
         const db = await idb.open();
@@ -62,7 +82,6 @@ const idb = {
         });
     }
 };
-
 
 class Particle { 
     constructor(width, height) { 
