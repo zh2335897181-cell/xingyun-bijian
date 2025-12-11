@@ -156,9 +156,71 @@ let store = {
 };
 let saveTimeout;
 const NOVEL_TAGS = { "🏆 男频精选": ["玄幻", "都市", "仙侠", "科幻", "悬疑", "奇幻", "历史", "游戏", "体育", "军事", "武侠", "轻小说"], "🌸 女频精选": ["现言", "古言", "幻言", "校园", "青春", "纯爱", "宫斗", "重生", "种田", "豪门", "女强", "快穿"], "⚡ 核心元素": ["系统", "神医", "脑洞", "鉴宝", "恐怖", "推理", "谍战", "末世", "无限流", "赛博朋克", "克苏鲁", "灵气复苏", "诸天万界"], "🎭 主角人设": ["腹黑", "高冷", "病娇", "赘婿", "战神", "神豪", "学霸", "奶爸", "杀伐果断", "智商在线", "反派", "老六"], "🎨 风格基调": ["爽文", "搞笑", "轻松", "热血", "暗黑", "治愈", "甜宠", "虐文", "无敌", "迪化", "群像", "幕后流"] };
+// --- 公告数据 (已更新至 12/11) ---
 const systemAnnouncements = [
-    { id: 999, title: "🔑 新手必读：免费获取 DeepSeek API Key", date: "置顶", type: "important", content: `<div class="space-y-2"><p>DeepSeek 注册即送免费额度，无需绑卡！</p><ol class="list-decimal pl-4 space-y-1 opacity-80"><li>访问 <a href="https://platform.deepseek.com/" target="_blank" class="underline font-bold text-accent">DeepSeek 开放平台</a>。</li><li>点击左侧 <b>API Keys</b> 菜单 -> <b>Create API Key</b>。</li><li>复制 <code class="bg-black/20 px-1 rounded border border-white/10">sk-</code> 开头的密钥，粘贴到本网页右上角。</li></ol></div>` },
-    { id: 305, title: "v3.7 优化更新", date: "2025-07-02", type: "update", content: "• <b>纯净模式</b>: 移除了长短篇切换，专注于长篇网文连载体验。<br>• <b>性能提升</b>: 优化了编辑器响应速度。" }
+    { 
+        id: 999, 
+        title: "🔑 新手必读：免费获取 DeepSeek API Key", 
+        date: "置顶", 
+        type: "important", 
+        content: `<div class="space-y-2"><p>DeepSeek 注册即送免费额度，无需绑卡！</p><ol class="list-decimal pl-4 space-y-1 opacity-80"><li>访问 <a href="https://platform.deepseek.com/" target="_blank" class="underline font-bold text-accent">DeepSeek 开放平台</a>。</li><li>点击左侧 <b>API Keys</b> 菜单 -> <b>Create API Key</b>。</li><li>复制 <code class="bg-black/20 px-1 rounded border border-white/10">sk-</code> 开头的密钥，粘贴到本网页右上角。</li></ol></div>` 
+    },
+    { 
+        id: 307, 
+        title: "v3.7 存储可视化 & 硬刷新", 
+        date: "2025-12-11", 
+        type: "update", 
+        content: "• <b>存储监控</b>: 顶部栏新增实时存储空间显示，写作不焦虑。<br>• <b>硬刷新</b>: 新增“刷新”按钮，支持一键清理缓存并重载。<br>• <b>大纲模块</b>: 织机模式新增“当前章节大纲”实时修订面板。" 
+    },
+    { 
+        id: 306, 
+        title: "v3.6.5 底层存储重构", 
+        date: "2025-12-05", 
+        type: "update", 
+        content: "• <b>无限空间</b>: 存储引擎升级为 IndexedDB，突破 5MB 限制，支持百万字长篇。<br>• <b>性能飞跃</b>: 采用异步读写技术，彻底消除打字时的卡顿感。<br>• <b>无感迁移</b>: 旧版数据自动无缝迁移至新数据库。" 
+    },
+    { 
+        id: 305, 
+        title: "v3.5 “毒舌”与“星灵”", 
+        date: "2025-12-01", 
+        type: "update", 
+        content: "• <b>毒舌审稿</b>: AI 主编化身“喷子”，一针见血指出剧情毒点。<br>• <b>桌面星灵</b>: 新增互动桌宠，码字累了戳一戳，会有惊喜哦~" 
+    },
+    { 
+        id: 304, 
+        title: "v3.2 关系星图上线", 
+        date: "2025-11-20", 
+        type: "update", 
+        content: "• <b>可视化关系</b>: 角色页与世界观页新增“拓扑图”模式，拖拽节点梳理复杂人物关系。<br>• <b>物理引擎</b>: 引入力导向图算法，让设定像星系一样自然展开。" 
+    },
+    { 
+        id: 303, 
+        title: "v3.0 沉浸式禅模式", 
+        date: "2025-11-05", 
+        type: "update", 
+        content: "• <b>Zen Mode</b>: 一键隐藏所有无关UI，专注于纯粹的写作体验。<br>• <b>移动端适配</b>: 针对手机和平板进行了深度触控优化。" 
+    },
+    { 
+        id: 302, 
+        title: "v2.5 AI 润色工具箱", 
+        date: "2025-10-25", 
+        type: "update", 
+        content: "• <b>划词工具栏</b>: 选中文本即可唤起 AI，支持润色、扩写、精简、换词。<br>• <b>多主题</b>: 新增“晨曦”、“水墨”、“赛博”等多款氛围主题。" 
+    },
+    { 
+        id: 301, 
+        title: "v2.0 智能构思引擎", 
+        date: "2025-10-10", 
+        type: "update", 
+        content: "• <b>一键生成</b>: 输入一句话梗概，自动推演完整世界观、角色卡与章节大纲。<br>• <b>智能捏人</b>: AI 能够根据现有剧情自动构思新角色。" 
+    },
+    { 
+        id: 100, 
+        title: "v1.0 星云笔尖诞生", 
+        date: "2025-10-01", 
+        type: "important", 
+        content: "• <b>本地优先</b>: 所有的创作数据仅存储在您的浏览器中，隐私绝对安全。<br>• <b>DeepSeek 驱动</b>: 深度集成 DeepSeek 模型，辅助网文创作。" 
+    }
 ];
 
 // --- 初始化 & 生命周期 ---
