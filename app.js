@@ -113,6 +113,76 @@ class Particle {
 
 let particles = [];
 let canvasWidth, canvasHeight;
+let editingCharIndex = -1; // 全局变量：记录当前正在编辑的角色索引 (-1 代表新建)
+
+
+function openCreateCharModal() {
+    editingCharIndex = -1; // 标记为新建模式
+    document.getElementById('new-char-name').value = '';
+    document.getElementById('new-char-role').value = '';
+    document.getElementById('new-char-tags').value = '';
+    document.getElementById('new-char-desc').value = '';
+    
+    // 修改弹窗标题提示
+    const title = document.querySelector('#char-modal h3');
+    if(title) title.innerText = "创造新角色";
+    
+    toggleModal('char-modal');
+}
+
+
+// 2. 打开“编辑角色”弹窗 (回填数据)
+function editCharacter(index) {
+    editingCharIndex = index; // 标记为编辑模式
+    const char = store.characters[index];
+    
+    // 回填数据到输入框
+    document.getElementById('new-char-name').value = char.name || '';
+    document.getElementById('new-char-role').value = char.role || '';
+    // 兼容数组转字符串，支持中英文逗号
+    document.getElementById('new-char-tags').value = (char.tags || []).join('，'); 
+    document.getElementById('new-char-desc').value = char.desc || '';
+
+    // 修改弹窗标题提示
+    const title = document.querySelector('#char-modal h3');
+    if(title) title.innerText = "编辑角色: " + char.name;
+
+    toggleModal('char-modal');
+}
+
+
+// 3. 保存角色 (兼容“新建”与“更新”)
+function addManualCharacter() { 
+    const n = document.getElementById('new-char-name').value.trim();
+    if(!n) return showToast("角色名不能为空", "error");
+    
+    // 处理标签：支持逗号、顿号、空格分隔
+    const rawTags = document.getElementById('new-char-tags').value;
+    const tagsArray = rawTags.split(/[,，、\s]/).filter(t => t.trim());
+
+    const charObj = {
+        name: n,
+        role: document.getElementById('new-char-role').value.trim(),
+        tags: tagsArray, 
+        desc: document.getElementById('new-char-desc').value.trim()
+    };
+
+    if (editingCharIndex >= 0 && editingCharIndex < store.characters.length) {
+        // --- 编辑模式：更新现有人物 ---
+        store.characters[editingCharIndex] = charObj;
+        showToast(`角色【${n}】信息已更新`, "success");
+    } else {
+        // --- 新建模式：追加新人物 ---
+        store.characters.push(charObj);
+        showToast(`新角色【${n}】已创建`, "success");
+    }
+
+    renderCharacters(); // 刷新列表
+    saveData();         // 保存到数据库
+    initGraph();        // 刷新关系图
+    toggleModal('char-modal'); // 关闭弹窗
+}
+
 
 function resizeCanvas() { 
     const canvas = document.getElementById('bg-canvas');
@@ -948,50 +1018,47 @@ async function generateInitialAnalysis() {
 }
 // --- 新增：AI 单独捏人功能 ---
 // --- 修改开始：AI 捏人逻辑优化 ---// --- 新增：AI 单独捏人功能 ---
+// 5. 优化 AI 捏人逻辑 (强制确切人名 & 关系延展)
 async function aiGenerateCharacter(btn) {
     const p = document.getElementById('novel-prompt').value;
     if (!p) return showToast("请先输入核心梗概", "error");
 
-    // UI 交互：锁定按钮
     const originalText = btn.innerHTML;
     btn.innerHTML = "⏳ 构思中...";
     btn.disabled = true;
 
     try {
-        // 获取当前已有角色的名字，避免 AI 生成重复角色
         const existingNames = store.characters.map(c => c.name).join('、');
-        const context = existingNames ? `(已知角色: ${existingNames})` : "";
+        const context = existingNames ? `(已知角色: ${existingNames})` : "暂无";
         const tags = store.tags.length > 0 ? `风格标签:${store.tags.join(',')}` : "";
 
-        // 构造 Prompt
+        // --- Prompt 升级 ---
         const prompt = `基于核心梗概: "${p}"。${tags}。
         当前已有角色: ${context}。
-        请构思 1 个新的关键角色，该角色需要能推动剧情发展或与现有角色产生冲突/羁绊。
+        请构思 1 个新的关键角色。
+        
+        【重要要求】
+        1. **必须拥有确切的人名或网名** (严禁使用“神秘人”、“A某”、“主角朋友”等代称)。
+        2. **延展人物关系**：在描述中必须体现该角色与现有角色(或主角)的潜在联系、冲突或羁绊。
+        3. 角色需要能推动剧情发展。
         
         必须返回纯 JSON 对象 (NO MARKDOWN)，格式如下:
-        {"name": "姓名", "role": "定位(如:反派/死党)", "tags": ["标签1", "标签2"], "desc": "简短人设描述"}`;
+        {"name": "确切姓名", "role": "定位(如:反派/死党)", "tags": ["标签1", "标签2"], "desc": "人设描述(包含关系网延展)"}`;
 
-        // 调用 AI
         const res = await callAI([
             { role: "system", content: "你是一个专业的网文人设策划。只返回 RAW JSON。" },
             { role: "user", content: prompt }
         ]);
 
-        // 数据清洗与容错
         let newChar = cleanJson(res);
-        
-        // 如果 AI 返回的是数组（有时候它会这么做），取第一个；如果是对象，直接用
         if (Array.isArray(newChar)) newChar = newChar[0];
-
-        // 强制补全 tags 防止报错
         if (!Array.isArray(newChar.tags)) newChar.tags = [];
         if (!newChar.name) throw new Error("AI 生成格式异常");
 
-        // 存入数据并刷新界面
         store.characters.push(newChar);
         renderCharacters();
         saveData();
-        initGraph(); // 刷新关系图
+        initGraph(); 
         
         showToast(`角色【${newChar.name}】已生成`, "success");
 
@@ -999,7 +1066,6 @@ async function aiGenerateCharacter(btn) {
         console.error(e);
         showToast("捏人失败: " + e.message, "error");
     } finally {
-        // 恢复按钮
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
@@ -1161,12 +1227,13 @@ async function generateChapterText(cont) {
 }
 
 async function aiBrainstormTags() { const p=document.getElementById('novel-prompt').value; if(!p) return showToast("请输入梗概后再使用哦~么么哒~", "info"); showToast("分析中...", "info"); try { const r=await callAI([{role:'user', content:`基于梗概推荐5-8个标签。JSON数组格式。梗概：${p}`}]); const t=cleanJson(r); if(Array.isArray(t)) { let c=0; t.forEach(x=>{if(!store.tags.includes(x)){store.tags.push(x);c++;}}); renderSelectedTags(); renderTagSelector(); saveData(); showToast(`添加 ${c} 个标签`, "success"); } } catch(e) { showToast(e.message, "error"); } }
+// 4. 渲染角色列表 (增加点击事件)
 function renderCharacters() { 
     const l = document.getElementById('character-list'); 
     if (!l) return; 
     
     l.innerHTML = store.characters.map((c, i) => `
-        <div class="glass-panel p-3 rounded-xl relative group hover:bg-[var(--panel-bg)] border border-[var(--panel-border)] shadow-sm flex flex-col gap-2 transition-all hover:-translate-y-1 hover:shadow-md hover:border-indigo-500/30">
+        <div onclick="editCharacter(${i})" class="glass-panel p-3 rounded-xl relative group hover:bg-[var(--panel-bg)] border border-[var(--panel-border)] shadow-sm flex flex-col gap-2 transition-all hover:-translate-y-1 hover:shadow-md hover:border-indigo-500/30 cursor-pointer">
             <div class="flex justify-between items-start">
                 <span class="font-bold text-accent text-sm truncate pr-2">${c.name}</span>
                 <span class="text-[10px] opacity-60 bg-black/20 px-1.5 py-0.5 rounded text-sub border border-[var(--panel-border)] whitespace-nowrap max-w-[45%] truncate">${c.role}</span>
@@ -1176,10 +1243,11 @@ function renderCharacters() {
                 ${c.desc || '暂无描述...'}
             </div>
 
-            <button onclick="store.characters.splice(${i},1);renderCharacters();saveData();initGraph()" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500/80 hover:bg-red-500 rounded-full text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow-md backdrop-blur-sm z-10">×</button>
+            <button onclick="event.stopPropagation(); store.characters.splice(${i},1); renderCharacters(); saveData(); initGraph()" class="absolute -top-2 -right-2 w-5 h-5 bg-red-500/80 hover:bg-red-500 rounded-full text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow-md backdrop-blur-sm z-10">×</button>
         </div>
     `).join(''); 
-}function renderOutline() { const c=document.getElementById('outline-container'); const e=document.getElementById('outline-empty-state'); const p=document.getElementById('chapter-progress-text'); const t=document.getElementById('target-total-chapters').value; p.innerText=`${store.outline.length}/${t}`; if(store.outline.length===0){c.innerHTML='';e.classList.remove('hidden');return;}else{e.classList.add('hidden');} c.innerHTML=store.outline.map((ch,i)=>{ const has=store.chapterTexts[ch.id]&&store.chapterTexts[ch.id].length>0; const b=has?`<span class="text-[10px] bg-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/30">✅ 已写</span>`:`<span class="text-[10px] bg-[var(--input-bg)] text-sub px-2 py-0.5 rounded-full border border-[var(--panel-border)] opacity-60">⏳ 待写</span>`; const sel=store.currentChapterId==ch.id?'card-active scale-[1.02]':''; return `<div class="glass-panel p-5 rounded-2xl cursor-pointer hover:bg-[var(--panel-bg)] transition-all group highlight-card relative overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 ${sel}" onclick="selectChapter(${ch.id})"><div class="absolute -right-2 -top-5 text-[5rem] font-bold opacity-[0.03] text-main pointer-events-none mono-font select-none">${String(i+1).padStart(2,'0')}</div><div class="relative z-10"><div class="flex justify-between items-start mb-3"><span class="text-xs font-bold opacity-50 tracking-wider text-sub">CH ${i+1}</span>${b}</div><h3 class="text-sm font-bold text-main truncate mb-2 group-hover:text-accent transition-colors leading-relaxed">${ch.title}</h3><p class="text-xs text-sub leading-relaxed line-clamp-3 opacity-80">${ch.desc}</p></div></div>`; }).join(''); const sel=document.getElementById('chapter-selector'); const val=sel.value; sel.innerHTML='<option value="">选择章节...</option>'+store.outline.map(ch=>`<option value="${ch.id}">${ch.title}</option>`).join(''); if(val) sel.value=val; }
+}
+function renderOutline() { const c=document.getElementById('outline-container'); const e=document.getElementById('outline-empty-state'); const p=document.getElementById('chapter-progress-text'); const t=document.getElementById('target-total-chapters').value; p.innerText=`${store.outline.length}/${t}`; if(store.outline.length===0){c.innerHTML='';e.classList.remove('hidden');return;}else{e.classList.add('hidden');} c.innerHTML=store.outline.map((ch,i)=>{ const has=store.chapterTexts[ch.id]&&store.chapterTexts[ch.id].length>0; const b=has?`<span class="text-[10px] bg-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/30">✅ 已写</span>`:`<span class="text-[10px] bg-[var(--input-bg)] text-sub px-2 py-0.5 rounded-full border border-[var(--panel-border)] opacity-60">⏳ 待写</span>`; const sel=store.currentChapterId==ch.id?'card-active scale-[1.02]':''; return `<div class="glass-panel p-5 rounded-2xl cursor-pointer hover:bg-[var(--panel-bg)] transition-all group highlight-card relative overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 ${sel}" onclick="selectChapter(${ch.id})"><div class="absolute -right-2 -top-5 text-[5rem] font-bold opacity-[0.03] text-main pointer-events-none mono-font select-none">${String(i+1).padStart(2,'0')}</div><div class="relative z-10"><div class="flex justify-between items-start mb-3"><span class="text-xs font-bold opacity-50 tracking-wider text-sub">CH ${i+1}</span>${b}</div><h3 class="text-sm font-bold text-main truncate mb-2 group-hover:text-accent transition-colors leading-relaxed">${ch.title}</h3><p class="text-xs text-sub leading-relaxed line-clamp-3 opacity-80">${ch.desc}</p></div></div>`; }).join(''); const sel=document.getElementById('chapter-selector'); const val=sel.value; sel.innerHTML='<option value="">选择章节...</option>'+store.outline.map(ch=>`<option value="${ch.id}">${ch.title}</option>`).join(''); if(val) sel.value=val; }
 function updateProgressUI() { document.getElementById('chapter-progress-text').innerText=`${store.outline.length}/${document.getElementById('target-total-chapters').value}`; }
 function activateLoom() { document.getElementById('section-loom').classList.remove('hidden'); document.getElementById('section-loom').scrollIntoView({behavior:'smooth'}); }
 function loadChapterText() { const id=document.getElementById('chapter-selector').value; store.currentChapterId=id; document.getElementById('chapter-editor').value=(id&&store.chapterTexts[id])?store.chapterTexts[id]:""; updateWordCount(); }
