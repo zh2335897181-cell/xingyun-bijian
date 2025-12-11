@@ -1071,71 +1071,91 @@ async function aiGenerateCharacter(btn) {
     }
 }
 // --- 修改结束 ---
-// --- 修改后的剧情延展逻辑 (严格计数 + 上下文强关联) ---
+// --- 修改后的剧情延展逻辑 (精准控量 + 智能结局控制 + 去除世界观) ---
 async function generateMoreOutline() { 
-    // 1. 获取状态与目标
+    // 1. 获取当前状态与用户设定的目标
     const currentCount = store.outline.length; 
     const targetTotal = parseInt(document.getElementById('target-total-chapters').value) || 100; 
     
-    if(currentCount >= targetTotal) return showToast("已达目标章节数", "info"); 
+    // 【超限检查】如果当前章节数已经达到或超过设定值，强制停止
+    if(currentCount >= targetTotal) {
+        return showToast(`已达设定总章节数 (${targetTotal})，全书完结。`, "info"); 
+    }
 
     // 2. UI 锁定
     const btn = document.getElementById('btn-add-outline'); 
     const spinner = document.getElementById('outline-spinner'); 
-    const originalText = "<span>+ 延展剧情</span>"; // 记录原始按钮文本结构
-    
     btn.disabled = true; 
     btn.querySelector('span').innerText = "AI 正在推演..."; 
     spinner.classList.remove('hidden'); 
     
-    // 3. 准备基础信息
-    const tags = (store.tags && store.tags.length > 0) ? `风格标签：${store.tags.join(', ')}` : ""; 
-    const charInfo = store.characters.map(c => `${c.name}(${c.role})`).join('、');
-    
-    // 计算本次生成的范围 (默认一次生成 10 章，或者直到填满目标)
+    // 3. 【核心计算】本次需要生成的数量
+    // 逻辑：每次尝试生成10章，但绝对不超过 targetTotal
     const BATCH_SIZE = 10;
     const nextStart = currentCount + 1;
-    const nextEnd = Math.min(currentCount + BATCH_SIZE, targetTotal);
-    const countToGen = nextEnd - nextStart + 1;
+    const nextEnd = Math.min(currentCount + BATCH_SIZE, targetTotal); // 确保不超过上限
+    const countToGen = nextEnd - nextStart + 1; // 本次实际需要生成的数量 (例如差5章完结，这里就是5)
+    
+    // 【结局判定】判断本次生成是否包含全书的最后一章
+    const isFinalBatch = (nextEnd === targetTotal);
+
+    // 4. 准备Prompt素材 (已去除世界观)
+    const tags = (store.tags && store.tags.length > 0) ? `风格标签：${store.tags.join(', ')}` : ""; 
+    const charInfo = store.characters.map(c => `${c.name}(${c.role})`).join('、');
 
     try { 
         let systemPrompt = "";
         let userPrompt = "";
+        
+        // 5. 【智能进度指令】根据是否是最后一批，动态调整 AI 指令
+        let progressInstruction = "";
+        if (isFinalBatch) {
+            // --- 结局模式指令 ---
+            progressInstruction = `【结局控制：非常重要】
+            本次生成将到达全书设定的终点（第 ${targetTotal} 章）。
+            1. 请开始全力收束剧情线，填坑。
+            2. **第 ${countToGen} 章（即全书第 ${targetTotal} 章）必须是全书大结局**。
+            3. 严禁烂尾，给出一个完整、精彩的结局。`;
+        } else {
+            // --- 连载模式指令 ---
+            progressInstruction = `【进度控制：非常重要】
+            当前处于剧情发展阶段（进度：${nextEnd}/${targetTotal} 章）。
+            1. **严禁**在此处完结全书，故事必须继续。
+            2. 必须为后续章节（第 ${nextEnd + 1} 章以后）留出冲突伏笔和发展空间。
+            3. 不要出现“全书完”或类似大结局的剧情。`;
+        }
 
         const formatInstruction = `
         【必须返回纯 JSON 数组 (NO MARKDOWN)】
         格式示例：
         [
-            {"title": "第一章 少年出山", "desc": "主角在山上练剑..."},
-            {"title": "第二章 初入江湖", "desc": "主角下山遇到了..."}
+            {"title": "章节标题", "desc": "剧情大纲..."},
+            ...
         ]`;
 
         if (currentCount === 0) {
-            // --- 场景 A：从零开始 (前10章) ---
-            // 重点：阅读梗概
+            // --- 场景 A：从零开始 (阅读梗概) ---
             systemPrompt = `你是一个专业的网文大纲策划。
             
             【核心设定】
             书名/梗概：${store.concept}
-            世界观：${store.lore}
             ${tags}
             主要角色：${charInfo}
             
             【任务】
-            请根据核心梗概，从零开始构思前 ${countToGen} 章的详细大纲。
+            请从零开始构思前 ${countToGen} 章的详细大纲。
             
             【要求】
-            1. 严格按照梗概设定展开，节奏紧凑，黄金三章要有爆点。
-            2. **必须严格生成 ${countToGen} 个章节**，不多也不少。
-            3. 输出 JSON 格式。`;
+            1. 严格按照梗概设定展开，节奏紧凑。
+            2. **必须严格生成 ${countToGen} 个章节**。
+            3. ${progressInstruction}
+            4. 输出 JSON 格式。`;
 
             userPrompt = `请生成第 1 章到第 ${countToGen} 章的大纲。${formatInstruction}`;
 
         } else {
-            // --- 场景 B：剧情延展 (续写) ---
-            // 重点：阅读前文大纲，保持连贯
-            
-            // 获取最近 10 章的大纲作为上下文 (避免 token 溢出，取最近的足矣)
+            // --- 场景 B：剧情延展 (阅读前文大纲) ---
+            // 获取最近 10 章的大纲作为 Context
             const contextSize = 10;
             const recentOutlines = store.outline.slice(-contextSize).map(ch => 
                 `第${ch.id}章：${ch.title}\n剧情：${ch.desc}`
@@ -1154,31 +1174,36 @@ async function generateMoreOutline() {
             ----------------
             
             【任务】
-            请严格承接上述剧情，继续推演接下来的 ${countToGen} 章大纲。
+            请严格承接上文，继续推演接下来的 ${countToGen} 章大纲。
             
             【要求】
-            1. **逻辑连贯**：严格遵循前文的故事线发展，承接伏笔，严禁剧情断层或吃书。
+            1. 逻辑连贯，承接伏笔，严禁吃书。
             2. **必须严格生成 ${countToGen} 个章节** (从第 ${nextStart} 章 到 第 ${nextEnd} 章)。
-            3. 输出 JSON 格式。`;
+            3. ${progressInstruction}
+            4. 输出 JSON 格式。`;
 
             userPrompt = `请继续生成第 ${nextStart} 章到第 ${nextEnd} 章的大纲。${formatInstruction}`;
         }
 
-        // 4. 调用 AI
+        // 6. 调用 AI
         const res = await callAI([
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
         ]); 
 
-        // 5. 数据处理
-        const newChapters = cleanJson(res);
-        
+        // 7. 数据处理与保护
+        let newChapters = cleanJson(res);
         if (!Array.isArray(newChapters)) throw new Error("AI 返回格式错误，请重试");
 
-        // 写入 Store
+        // 【截断保护】防止 AI 有时候抽风生成多了，这里强制截取我们需要的那部分
+        // 比如我们只要5章，AI给了10章，我们只取前5章，确保不超标
+        if (newChapters.length > countToGen) {
+            newChapters = newChapters.slice(0, countToGen);
+        }
+
         newChapters.forEach((ch, index) => {
             store.outline.push({
-                id: currentCount + index + 1, // 确保 ID 连续
+                id: currentCount + index + 1,
                 title: ch.title, 
                 desc: ch.desc,
                 targetWords: store.defaultWordCount || '2000-3000'
@@ -1187,9 +1212,11 @@ async function generateMoreOutline() {
 
         renderOutline(); 
         saveData(); 
-        showToast(`成功延展 ${newChapters.length} 章剧情`, "success"); 
         
-        // 自动滚动到底部
+        let successMsg = `成功延展 ${newChapters.length} 章剧情`;
+        if (isFinalBatch) successMsg += " (全书完结)";
+        showToast(successMsg, "success"); 
+        
         const container = document.getElementById('outline-container');
         if(container) container.scrollTop = container.scrollHeight;
 
@@ -1198,11 +1225,10 @@ async function generateMoreOutline() {
         showToast("大纲生成失败: " + e.message, "error"); 
     } finally { 
         btn.disabled = false; 
-        btn.querySelector('span').innerHTML = "+ 延展剧情"; 
+        btn.querySelector('span').innerText = "+ 延展剧情"; 
         spinner.classList.add('hidden'); 
     } 
 }
-
 function insertLoreTemplate(type) { const t={'等级体系':'\n【力量等级】\n1. 凡境：练气、筑基\n2. 灵境：元婴、化神','地理环境':'\n【世界地图】\n东域：修仙宗门\n西漠：魔修','势力组织':'\n【主要势力】\n天道宗：正道\n血煞门：反派'}; document.getElementById('novel-lore').value+=t[type]||''; if(loreViewMode==='graph') parseLoreToGraph(); debounceSave(); }
 async function aiGenLore() { const p=document.getElementById('novel-prompt').value; if(!p) return showToast("请输入梗概后再使用哦~", "info"); document.getElementById('lore-loading').classList.remove('hidden'); try { const r=await callAI([{role:'user', content:`基于梗概生成世界观（等级、势力等）。格式：\n【大标题】\n名称：描述\n...\n\n梗概：${p}`}]); document.getElementById('novel-lore').value+="\n"+r; if(loreViewMode==='graph') parseLoreToGraph(); debounceSave(); showToast("推演完成", "success"); } catch(e) { showToast(e.message, "error"); } finally { document.getElementById('lore-loading').classList.add('hidden'); } }
 
