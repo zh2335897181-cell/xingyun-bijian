@@ -448,24 +448,24 @@
     <div id="reset-modal" class="fixed inset-0 z-[130] hidden">
         <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="toggleResetModal()"></div>
         <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-sm shadow-2xl border border-red-500/30 p-6 flex flex-col items-center text-center">
-            <div class="text-4xl mb-4">⚠️</div>
-            <h3 class="text-lg font-bold text-main mb-2">确认重置应用？</h3>
+            <div class="text-4xl mb-4">♻️</div>
+            <h3 class="text-lg font-bold text-main mb-2">确认刷新页面？</h3>
             <p class="text-sm text-sub mb-6 leading-relaxed">此操作将清空所有设定、大纲和正文，但会 <b class="text-emerald-400">保留您的 API Key</b>。<br>操作无法撤销，建议先备份。</p>
             <div class="flex gap-3 w-full">
                 <button onclick="toggleResetModal()" class="flex-1 btn-ghost py-2.5 rounded-xl text-sm">取消</button>
-                <button onclick="performReset()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg transition-colors">确认重置</button>
+                <button onclick="performReset()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg transition-colors">确认刷新</button>
             </div>
         </div>
     </div>
     <div id="refresh-modal" class="fixed inset-0 z-[130] hidden">
     <div class="absolute inset-0 bg-black/80 backdrop-blur-sm" onclick="toggleRefreshModal()"></div>
     <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 glass-panel rounded-2xl w-11/12 max-w-sm shadow-2xl border border-red-500/30 p-6 flex flex-col items-center text-center">
-        <div class="text-4xl mb-4">♻️</div>
-        <h3 class="text-lg font-bold text-main mb-2">确认硬刷新？</h3>
+        <div class="text-4xl mb-4">⚠️</div>
+        <h3 class="text-lg font-bold text-main mb-2">确认重置？</h3>
         <p class="text-sm text-sub mb-6 leading-relaxed">此操作将 <b class="text-red-400">清除所有数据（包括 API Key）</b> 并重新加载页面。<br>相当于恢复出厂设置，操作无法撤销。</p>
         <div class="flex gap-3 w-full">
             <button onclick="toggleRefreshModal()" class="flex-1 btn-ghost py-2.5 rounded-xl text-sm">取消</button>
-            <button onclick="performRefresh()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg transition-colors">确认刷新</button>
+            <button onclick="performRefresh()" class="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl font-bold text-sm shadow-lg transition-colors">确认重置</button>
         </div>
     </div>
 </div>
