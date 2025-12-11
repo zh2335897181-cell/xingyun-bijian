@@ -1,4 +1,51 @@
 // --- 粒子系统 & Canvas (Defined First) ---
+
+// --- IndexedDB 系统 (新增) ---
+const DB_CONFIG = {
+    name: 'NebulaQuillDB',
+    version: 1,
+    storeName: 'novel_data'
+};
+
+const idb = {
+    open: () => {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
+            req.onerror = () => reject(req.error);
+            req.onsuccess = () => resolve(req.result);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains(DB_CONFIG.storeName)) {
+                    db.createObjectStore(DB_CONFIG.storeName, { keyPath: 'id' });
+                }
+            };
+        });
+    },
+    put: async (data) => {
+        const db = await idb.open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(DB_CONFIG.storeName, 'readwrite');
+            const store = tx.objectStore(DB_CONFIG.storeName);
+            // 我们只存一条核心数据，ID固定为 'main'
+            const req = store.put({ id: 'main', ...data });
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    },
+    get: async () => {
+        const db = await idb.open();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(DB_CONFIG.storeName, 'readonly');
+            const store = tx.objectStore(DB_CONFIG.storeName);
+            const req = store.get('main');
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+};
+
+
+
 class Particle { 
     constructor(width, height) { 
         this.x = Math.random() * width; 
@@ -165,11 +212,15 @@ function toggleRefreshModal() {
     document.getElementById('refresh-modal').classList.toggle('hidden');
 }
 
-function performRefresh() {
-    // 1. 清除所有本地存储（包括 API Key、小说内容、设置等）
-    localStorage.clear();
-    // 2. 重新加载页面
-    location.reload();
+async function performRefresh() { 
+    // 1. 清空 IndexedDB
+    try { await idb.clear(); } catch(e) {}
+
+    // 2. 清空 LocalStorage
+    localStorage.clear(); 
+    
+    // 3. 刷新 (彻底恢复出厂设置)
+    location.reload(); 
 }
 
 function parseLoreToGraph() {
@@ -433,28 +484,150 @@ function changeTheme(n) { document.documentElement.setAttribute('data-theme', n)
 function switchTab(id) { ['tab-prompt','tab-lore','tab-graph'].forEach(t=>document.getElementById(t).classList.add('hidden')); ['btn-tab-prompt','btn-tab-lore','btn-tab-graph'].forEach(b=>document.getElementById(b).className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 opacity-60 hover:opacity-100 hover:bg-[var(--panel-bg)]"); document.getElementById(id).classList.remove('hidden'); document.getElementById('btn-'+id).className="flex-1 px-4 py-2.5 text-sm font-bold rounded-xl transition-all duration-300 shadow-md bg-[var(--panel-bg)] text-accent"; if(id==='tab-graph') initGraph(); }
 function toggleModal(id) { document.getElementById(id).classList.toggle('hidden'); }
 function showToast(m, t='info') { Toastify({ text: m, duration: 3000, gravity: "top", position: "center", style: { background: t==='success'?"#10b981":"#f43f5e" }, className: "rounded-lg shadow-lg font-bold text-sm" }).showToast(); }
-function saveData() { store.apiKey=document.getElementById('api-key').value; store.concept=document.getElementById('novel-prompt').value; store.lore=document.getElementById('novel-lore').value; store.targetChapters=document.getElementById('target-total-chapters').value; localStorage.setItem('deepseek_novel_data_v2', JSON.stringify(store)); const s=document.getElementById('save-status'); if(s){s.innerText="● Saved "+new Date().toLocaleTimeString();s.style.color="var(--accent-color)";} }
-function loadData() { const s=localStorage.getItem('deepseek_novel_data_v2')||localStorage.getItem('deepseek_novel_data_v1'); if(s){ try{ const p=JSON.parse(s); store={...store,...p}; if(!store.tags) store.tags=[]; if(!store.baseUrl) store.baseUrl='https://api.deepseek.com/chat/completions'; document.getElementById('api-key').value=store.apiKey||''; document.getElementById('novel-prompt').value=store.concept||''; document.getElementById('novel-lore').value=store.lore||''; document.getElementById('target-total-chapters').value=store.targetChapters||100; if(store.characters.length) renderCharacters(); if(store.outline.length){ renderOutline(); document.getElementById('section-outline').classList.remove('hidden'); if(store.currentChapterId){ activateLoom(); document.getElementById('chapter-selector').value=store.currentChapterId; loadChapterText(); }} renderSelectedTags(); detectEngine(); }catch(e){} } }
-function clearAllData() { toggleResetModal(); }
-function toggleResetModal() { document.getElementById('reset-modal').classList.toggle('hidden'); }
-//function performReset() { localStorage.clear(); location.reload(); }
-// --- 修改开始：智能重置与快捷键 ---
 
-// 1. 替换原有的 performReset 函数
-function performReset() { 
+
+// --- 修改后的保存逻辑 (支持 IndexedDB) ---
+async function saveData() {
+    // 1. 获取当前 UI 状态更新到 store
+    const apiKeyInput = document.getElementById('api-key');
+    if (apiKeyInput) store.apiKey = apiKeyInput.value;
+    
+    const promptInput = document.getElementById('novel-prompt');
+    if (promptInput) store.concept = promptInput.value;
+    
+    const loreInput = document.getElementById('novel-lore');
+    if (loreInput) store.lore = loreInput.value;
+    
+    const targetInput = document.getElementById('target-total-chapters');
+    if (targetInput) store.targetChapters = targetInput.value;
+
+    // 2. 异步写入 IndexedDB
+    try {
+        await idb.put(store);
+        
+        // 3. UI 反馈
+        const s = document.getElementById('save-status');
+        if (s) {
+            s.innerText = "● Saved " + new Date().toLocaleTimeString();
+            s.style.color = "var(--accent-primary)"; // 修正了颜色变量引用
+            s.style.opacity = "1";
+        }
+    } catch (e) {
+        console.error("Save Failed:", e);
+        const s = document.getElementById('save-status');
+        if (s) {
+            s.innerText = "⚠️ Save Failed!";
+            s.style.color = "#f43f5e";
+        }
+    }
+}
+
+// --- 修改后的加载逻辑 (含自动迁移) ---
+async function loadData() {
+    try {
+        // 1. 尝试从 IndexedDB 读取
+        let data = await idb.get();
+        let migrated = false;
+
+        // 2. 如果 DB 为空，检查旧版 LocalStorage (数据迁移)
+        if (!data) {
+            const localRaw = localStorage.getItem('deepseek_novel_data_v2') || localStorage.getItem('deepseek_novel_data_v1');
+            if (localRaw) {
+                console.log("检测到旧版数据，正在迁移至 IndexedDB...");
+                try {
+                    data = JSON.parse(localRaw);
+                    migrated = true;
+                } catch (e) {
+                    console.error("旧数据解析失败", e);
+                }
+            }
+        }
+
+        // 3. 合并数据到 store
+        if (data) {
+            // 剔除 id 字段 (因为 IndexedDB 会多存一个 keyPath id)
+            const { id, ...rest } = data;
+            store = { ...store, ...rest };
+            
+            // 4. 数据补全与兼容
+            if (!store.tags) store.tags = [];
+            if (!store.baseUrl) store.baseUrl = 'https://api.deepseek.com/chat/completions';
+            if (!store.characters) store.characters = [];
+            if (!store.outline) store.outline = [];
+
+            // 5. 恢复 UI 显示
+            const elKey = document.getElementById('api-key');
+            if (elKey) elKey.value = store.apiKey || '';
+            
+            const elPrompt = document.getElementById('novel-prompt');
+            if (elPrompt) elPrompt.value = store.concept || '';
+            
+            const elLore = document.getElementById('novel-lore');
+            if (elLore) elLore.value = store.lore || '';
+            
+            const elTarget = document.getElementById('target-total-chapters');
+            if (elTarget) elTarget.value = store.targetChapters || 100;
+            
+            const elBaseUrl = document.getElementById('custom-base-url');
+            if (elBaseUrl) elBaseUrl.value = store.baseUrl;
+
+            // 恢复各模块视图
+            if (store.characters.length) renderCharacters();
+            if (store.outline.length) {
+                renderOutline();
+                document.getElementById('section-outline').classList.remove('hidden');
+                // 恢复最后编辑的章节
+                if (store.currentChapterId) {
+                    // 稍微延迟以确保 DOM 准备好
+                    setTimeout(() => {
+                        activateLoom();
+                        selectChapter(store.currentChapterId);
+                    }, 100);
+                }
+            }
+            renderSelectedTags();
+            detectEngine();
+            changeTheme(store.theme || 'crystal');
+
+            // 6. 如果发生了迁移，保存到 DB 并清空 LocalStorage (释放空间)
+            if (migrated) {
+                await saveData(); // 存入 DB
+                localStorage.removeItem('deepseek_novel_data_v2'); // 移除旧数据
+                localStorage.removeItem('deepseek_novel_data_v1');
+                showToast("🎉 数据已升级至高性能存储库！", "success");
+            }
+        }
+    } catch (e) {
+        console.error("Load Failed:", e);
+        showToast("数据加载出错: " + e.message, "error");
+    }
+}function clearAllData() { toggleResetModal(); }
+function toggleResetModal() { document.getElementById('reset-modal').classList.toggle('hidden'); }
+
+
+async function performReset() { 
     // 获取当前的 API Key
     const currentKey = store.apiKey || document.getElementById('api-key').value;
     
-    // 清空所有本地存储
+    // 1. 清空 IndexedDB
+    try { await idb.clear(); } catch(e) {}
+    
+    // 2. 清空 LocalStorage
     localStorage.clear(); 
     
-    // 如果有 Key，单独把它存回去 (使用 store 的数据结构)
+    // 3. 保留 Key (存回 DB)
     if(currentKey) {
-        const freshData = { apiKey: currentKey };
-        localStorage.setItem('deepseek_novel_data_v2', JSON.stringify(freshData));
+        // 重置 store 为初始状态，仅保留 key
+        const freshStore = {
+            apiKey: currentKey,
+            concept: '', lore: '', targetChapters: 100,
+            characters: [], outline: [], currentChapterId: null, chapterTexts: {},
+            tags: [], theme: 'crystal', engine: 'none',
+            baseUrl: 'https://api.deepseek.com/chat/completions'
+        };
+        await idb.put(freshStore);
     }
     
-    // 刷新页面
     location.reload(); 
 }
 
