@@ -546,9 +546,11 @@ async function saveData() {
         const s = document.getElementById('save-status');
         if (s) {
             s.innerText = "● Saved " + new Date().toLocaleTimeString();
-            s.style.color = "var(--accent-primary)"; // 修正了颜色变量引用
+           s.style.color = "var(--accent-primary)"; // 修正了颜色变量引用
             s.style.opacity = "1";
         }
+        // ✅ 新增：保存后更新存储显示
+        updateStorageDisplay();
     } catch (e) {
         console.error("Save Failed:", e);
         const s = document.getElementById('save-status');
@@ -556,6 +558,46 @@ async function saveData() {
             s.innerText = "⚠️ Save Failed!";
             s.style.color = "#f43f5e";
         }
+    }
+}
+
+
+// --- 新增：存储空间计算显示 ---
+async function updateStorageDisplay() {
+    const el = document.getElementById('storage-usage');
+    if (!el) return;
+
+    try {
+        // 从 IndexedDB 获取全量数据
+        const data = await idb.get();
+        if (!data) {
+            el.innerText = "0 KB";
+            return;
+        }
+
+        // 计算 JSON 字符串的字节大小
+        const jsonStr = JSON.stringify(data);
+        const bytes = new Blob([jsonStr]).size; 
+        
+        // 转换为 KB 或 MB
+        let display = "";
+        if (bytes < 1024 * 1024) {
+            display = (bytes / 1024).toFixed(1) + " KB";
+        } else {
+            display = (bytes / (1024 * 1024)).toFixed(2) + " MB";
+        }
+
+        el.innerText = "💾 " + display;
+        
+        // 如果体积过大（超过100MB），变红示警
+        if (bytes > 100 * 1024 * 1024) {
+            el.className = "text-xs mono-font border-r border-[var(--panel-border)] pr-3 text-red-400 font-bold animate-pulse";
+        } else {
+            el.className = "text-xs text-sub mono-font border-r border-[var(--panel-border)] pr-3 text-emerald-500/80";
+        }
+
+    } catch (e) {
+        console.error("Storage calc failed:", e);
     }
 }
 
@@ -625,6 +667,8 @@ async function loadData() {
             renderSelectedTags();
             detectEngine();
             changeTheme(store.theme || 'crystal');
+
+            updateStorageDisplay();
 
             // 6. 如果发生了迁移，保存到 DB 并清空 LocalStorage (释放空间)
             if (migrated) {
