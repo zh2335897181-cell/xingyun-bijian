@@ -1071,35 +1071,32 @@ async function aiGenerateCharacter(btn) {
     }
 }
 // --- 修改结束 ---
-// --- 修改后的剧情延展逻辑 (精准控量 + 智能结局控制 + 去除世界观) ---
+// --- 修改后的剧情延展逻辑 (直通大结局 + 100字简述) ---
 async function generateMoreOutline() { 
-    // 1. 获取当前状态与用户设定的目标
+    // 1. 获取状态与目标
     const currentCount = store.outline.length; 
     const targetTotal = parseInt(document.getElementById('target-total-chapters').value) || 100; 
     
-    // 【超限检查】如果当前章节数已经达到或超过设定值，强制停止
+    // 超限检查
     if(currentCount >= targetTotal) {
-        return showToast(`已达设定总章节数 (${targetTotal})，全书完结。`, "info"); 
+        return showToast(`已达设定总章节数 (${targetTotal})，无需生成。`, "info"); 
     }
 
     // 2. UI 锁定
     const btn = document.getElementById('btn-add-outline'); 
     const spinner = document.getElementById('outline-spinner'); 
     btn.disabled = true; 
-    btn.querySelector('span').innerText = "AI 正在推演..."; 
+    btn.querySelector('span').innerText = "AI 全速推演中..."; 
     spinner.classList.remove('hidden'); 
     
-    // 3. 【核心计算】本次需要生成的数量
-    // 逻辑：每次尝试生成10章，但绝对不超过 targetTotal
-    const BATCH_SIZE = 10;
+    // 3. 【核心修改】计算本次生成数量：直接生成到目标总数
     const nextStart = currentCount + 1;
-    const nextEnd = Math.min(currentCount + BATCH_SIZE, targetTotal); // 确保不超过上限
-    const countToGen = nextEnd - nextStart + 1; // 本次实际需要生成的数量 (例如差5章完结，这里就是5)
+    const nextEnd = targetTotal; // 直接指向最后一章
+    const countToGen = nextEnd - nextStart + 1;
     
-    // 【结局判定】判断本次生成是否包含全书的最后一章
-    const isFinalBatch = (nextEnd === targetTotal);
+    showToast(`正在规划剩余的 ${countToGen} 章大纲，请稍候...`, "info");
 
-    // 4. 准备Prompt素材 (已去除世界观)
+    // 4. 准备Prompt素材
     const tags = (store.tags && store.tags.length > 0) ? `风格标签：${store.tags.join(', ')}` : ""; 
     const charInfo = store.characters.map(c => `${c.name}(${c.role})`).join('、');
 
@@ -1107,101 +1104,76 @@ async function generateMoreOutline() {
         let systemPrompt = "";
         let userPrompt = "";
         
-        // 5. 【智能进度指令】根据是否是最后一批，动态调整 AI 指令
-        let progressInstruction = "";
-        if (isFinalBatch) {
-            // --- 结局模式指令 ---
-            progressInstruction = `【结局控制：非常重要】
-            本次生成将到达全书设定的终点（第 ${targetTotal} 章）。
-            1. 请开始全力收束剧情线，填坑。
-            2. **第 ${countToGen} 章（即全书第 ${targetTotal} 章）必须是全书大结局**。
-            3. 严禁烂尾，给出一个完整、精彩的结局。`;
-        } else {
-            // --- 连载模式指令 ---
-            progressInstruction = `【进度控制：非常重要】
-            当前处于剧情发展阶段（进度：${nextEnd}/${targetTotal} 章）。
-            1. **严禁**在此处完结全书，故事必须继续。
-            2. 必须为后续章节（第 ${nextEnd + 1} 章以后）留出冲突伏笔和发展空间。
-            3. 不要出现“全书完”或类似大结局的剧情。`;
-        }
-
         const formatInstruction = `
         【必须返回纯 JSON 数组 (NO MARKDOWN)】
         格式示例：
         [
-            {"title": "章节标题", "desc": "剧情大纲..."},
+            {"title": "章节标题", "desc": "简要大纲内容..."},
             ...
         ]`;
 
+        // 5. 【核心指令修改】要求简述、直通结局
+        const coreRequirement = `
+        【重要要求】
+        1. **一次性生成**从第 ${nextStart} 章到第 ${nextEnd} 章（大结局）的所有大纲。
+        2. **控制字数**：每章大纲仅需 **100字以内** 的简要叙述，概括核心事件即可，不要长篇大论。
+        3. **节奏把控**：剧情需要紧凑，并在第 ${nextEnd} 章完成故事收束（大结局）。
+        4. 严禁中断，必须返回完整的 ${countToGen} 个对象。`;
+
         if (currentCount === 0) {
-            // --- 场景 A：从零开始 (阅读梗概) ---
+            // --- 场景 A：从零开始 ---
             systemPrompt = `你是一个专业的网文大纲策划。
-            
             【核心设定】
             书名/梗概：${store.concept}
             ${tags}
             主要角色：${charInfo}
             
             【任务】
-            请从零开始构思前 ${countToGen} 章的详细大纲。
-            
-            【要求】
-            1. 严格按照梗概设定展开，节奏紧凑。
-            2. **必须严格生成 ${countToGen} 个章节**。
-            3. ${progressInstruction}
-            4. 输出 JSON 格式。`;
+            请根据梗概，一次性规划全书大纲（共 ${targetTotal} 章）。
+            ${coreRequirement}
+            输出 JSON 格式。`;
 
-            userPrompt = `请生成第 1 章到第 ${countToGen} 章的大纲。${formatInstruction}`;
+            userPrompt = `请生成第 1 章到第 ${targetTotal} 章的大纲。${formatInstruction}`;
 
         } else {
-            // --- 场景 B：剧情延展 (阅读前文大纲) ---
-            // 获取最近 10 章的大纲作为 Context
+            // --- 场景 B：剧情延展 (接续前文) ---
             const contextSize = 10;
             const recentOutlines = store.outline.slice(-contextSize).map(ch => 
                 `第${ch.id}章：${ch.title}\n剧情：${ch.desc}`
             ).join('\n\n');
 
             systemPrompt = `你是一个专业的网文大纲策划。
-            
             【核心设定】
             核心梗概：${store.concept}
             ${tags}
             
-            【当前剧情进度 (Context)】
-            以下是最近 ${Math.min(currentCount, contextSize)} 章的剧情，请仔细阅读：
-            ----------------
+            【当前进度】
+            前文最近剧情：
             ${recentOutlines}
-            ----------------
             
             【任务】
-            请严格承接上文，继续推演接下来的 ${countToGen} 章大纲。
-            
-            【要求】
-            1. 逻辑连贯，承接伏笔，严禁吃书。
-            2. **必须严格生成 ${countToGen} 个章节** (从第 ${nextStart} 章 到 第 ${nextEnd} 章)。
-            3. ${progressInstruction}
-            4. 输出 JSON 格式。`;
+            请承接上文，一次性写完剩余所有章节大纲。
+            ${coreRequirement}
+            输出 JSON 格式。`;
 
-            userPrompt = `请继续生成第 ${nextStart} 章到第 ${nextEnd} 章的大纲。${formatInstruction}`;
+            userPrompt = `请生成第 ${nextStart} 章到第 ${nextEnd} 章的大纲。${formatInstruction}`;
         }
 
-        // 6. 调用 AI
+        // 6. 调用 AI (可能需要较长时间，增加超时容忍度建议在服务端做，前端只能等待)
         const res = await callAI([
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
         ]); 
 
-        // 7. 数据处理与保护
+        // 7. 数据处理
         let newChapters = cleanJson(res);
-        if (!Array.isArray(newChapters)) throw new Error("AI 返回格式错误，请重试");
+        if (!Array.isArray(newChapters)) throw new Error("AI 返回格式错误，可能生成的 JSON 过长被截断");
 
-        // 【截断保护】防止 AI 有时候抽风生成多了，这里强制截取我们需要的那部分
-        // 比如我们只要5章，AI给了10章，我们只取前5章，确保不超标
-        if (newChapters.length > countToGen) {
-            newChapters = newChapters.slice(0, countToGen);
-        }
-
+        // 写入 Store
         newChapters.forEach((ch, index) => {
+            // 防止 AI 生成数量超过我们需要数量
+            if (currentCount + index + 1 > targetTotal) return;
+
             store.outline.push({
                 id: currentCount + index + 1,
                 title: ch.title, 
@@ -1213,16 +1185,14 @@ async function generateMoreOutline() {
         renderOutline(); 
         saveData(); 
         
-        let successMsg = `成功延展 ${newChapters.length} 章剧情`;
-        if (isFinalBatch) successMsg += " (全书完结)";
-        showToast(successMsg, "success"); 
+        showToast(`成功生成 ${newChapters.length} 章大纲`, "success"); 
         
         const container = document.getElementById('outline-container');
         if(container) container.scrollTop = container.scrollHeight;
 
     } catch(e) { 
         console.error(e);
-        showToast("大纲生成失败: " + e.message, "error"); 
+        showToast("大纲生成失败 (可能是章节过多导致): " + e.message, "error"); 
     } finally { 
         btn.disabled = false; 
         btn.querySelector('span').innerText = "+ 延展剧情"; 
@@ -1398,7 +1368,101 @@ function renderCharacters() {
         </div>
     `).join(''); 
 }
-function renderOutline() { const c=document.getElementById('outline-container'); const e=document.getElementById('outline-empty-state'); const p=document.getElementById('chapter-progress-text'); const t=document.getElementById('target-total-chapters').value; p.innerText=`${store.outline.length}/${t}`; if(store.outline.length===0){c.innerHTML='';e.classList.remove('hidden');return;}else{e.classList.add('hidden');} c.innerHTML=store.outline.map((ch,i)=>{ const has=store.chapterTexts[ch.id]&&store.chapterTexts[ch.id].length>0; const b=has?`<span class="text-[10px] bg-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/30">✅ 已写</span>`:`<span class="text-[10px] bg-[var(--input-bg)] text-sub px-2 py-0.5 rounded-full border border-[var(--panel-border)] opacity-60">⏳ 待写</span>`; const sel=store.currentChapterId==ch.id?'card-active scale-[1.02]':''; return `<div class="glass-panel p-5 rounded-2xl cursor-pointer hover:bg-[var(--panel-bg)] transition-all group highlight-card relative overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 ${sel}" onclick="selectChapter(${ch.id})"><div class="absolute -right-2 -top-5 text-[5rem] font-bold opacity-[0.03] text-main pointer-events-none mono-font select-none">${String(i+1).padStart(2,'0')}</div><div class="relative z-10"><div class="flex justify-between items-start mb-3"><span class="text-xs font-bold opacity-50 tracking-wider text-sub">CH ${i+1}</span>${b}</div><h3 class="text-sm font-bold text-main truncate mb-2 group-hover:text-accent transition-colors leading-relaxed">${ch.title}</h3><p class="text-xs text-sub leading-relaxed line-clamp-3 opacity-80">${ch.desc}</p></div></div>`; }).join(''); const sel=document.getElementById('chapter-selector'); const val=sel.value; sel.innerHTML='<option value="">选择章节...</option>'+store.outline.map(ch=>`<option value="${ch.id}">${ch.title}</option>`).join(''); if(val) sel.value=val; }
+// --- 新增：删除章节并重组顺序 ---
+function deleteChapter(id) {
+    if(!confirm(`确认删除【第 ${id} 章】吗？\n删除后，后续章节将自动前移，大纲和正文也会同步调整。`)) return;
+
+    // 1. 从数组中移除该章节
+    store.outline = store.outline.filter(ch => ch.id !== id);
+
+    // 2. 移除对应的正文
+    delete store.chapterTexts[id];
+
+    // 3. 【核心逻辑】重新编号 (Re-index)
+    // 确保删除中间章节后，ID 依然是 1, 2, 3... 连续的，这样上下文才不会断
+    let newTexts = {};
+    store.outline = store.outline.map((ch, index) => {
+        const newId = index + 1; // 新的 ID
+        
+        // 如果该章节原本有正文，迁移到新 ID 下
+        // 注意：这里用 ch.id (旧ID) 去取旧文本，存入 newId (新ID)
+        if (store.chapterTexts[ch.id]) {
+            newTexts[newId] = store.chapterTexts[ch.id];
+        } else if (store.chapterTexts[newId] && ch.id !== newId) {
+             // 边界情况处理
+             // 如果原本 store.chapterTexts[ch.id] 不存在，但 newTexts[newId] 可能被旧数据污染，需确保一一对应
+             // 此处逻辑：我们完全重建 newTexts，所以只需关心 ch.id 对应的内容
+        }
+        
+        return { ...ch, id: newId };
+    });
+    
+    // 更新 store
+    store.chapterTexts = newTexts;
+
+    // 4. 如果当前选中的是被删除的章节，重置编辑器
+    if (store.currentChapterId == id || store.currentChapterId > store.outline.length) {
+        store.currentChapterId = null;
+        document.getElementById('chapter-selector').value = "";
+        document.getElementById('chapter-editor').value = "";
+        document.getElementById('section-loom').classList.add('hidden');
+    } else if (store.currentChapterId > id) {
+        // 如果选中的是后面的章节，更新当前选中的 ID (减1)
+        store.currentChapterId = store.currentChapterId - 1;
+        document.getElementById('chapter-selector').value = store.currentChapterId;
+    }
+
+    saveData();
+    renderOutline();
+    showToast("章节已删除，序号已重排", "success");
+}
+
+// --- 修改：渲染大纲列表 (增加删除按钮) ---
+function renderOutline() { 
+    const c = document.getElementById('outline-container'); 
+    const e = document.getElementById('outline-empty-state'); 
+    const p = document.getElementById('chapter-progress-text'); 
+    const t = document.getElementById('target-total-chapters').value; 
+    
+    p.innerText = `${store.outline.length}/${t}`; 
+    
+    if(store.outline.length === 0){
+        c.innerHTML = '';
+        e.classList.remove('hidden');
+        return;
+    } else {
+        e.classList.add('hidden');
+    } 
+    
+    c.innerHTML = store.outline.map((ch, i) => { 
+        const has = store.chapterTexts[ch.id] && store.chapterTexts[ch.id].length > 0; 
+        const b = has ? `<span class="text-[10px] bg-emerald-500/20 text-emerald-500 px-2 py-0.5 rounded-full border border-emerald-500/30">✅ 已写</span>` : `<span class="text-[10px] bg-[var(--input-bg)] text-sub px-2 py-0.5 rounded-full border border-[var(--panel-border)] opacity-60">⏳ 待写</span>`; 
+        const sel = store.currentChapterId == ch.id ? 'card-active scale-[1.02]' : ''; 
+        
+        return `
+        <div class="glass-panel p-5 rounded-2xl cursor-pointer hover:bg-[var(--panel-bg)] transition-all group highlight-card relative overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 ${sel}" onclick="selectChapter(${ch.id})">
+            <div class="absolute -right-2 -top-5 text-[5rem] font-bold opacity-[0.03] text-main pointer-events-none mono-font select-none">${String(i+1).padStart(2,'0')}</div>
+            
+            <button onclick="event.stopPropagation(); deleteChapter(${ch.id})" class="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full hover:bg-red-500/20 text-sub hover:text-red-500 transition-colors z-20" title="删除此章">
+                🗑️
+            </button>
+
+            <div class="relative z-10">
+                <div class="flex justify-between items-start mb-3 pr-6">
+                    <span class="text-xs font-bold opacity-50 tracking-wider text-sub">CH ${i+1}</span>
+                    ${b}
+                </div>
+                <h3 class="text-sm font-bold text-main truncate mb-2 group-hover:text-accent transition-colors leading-relaxed">${ch.title}</h3>
+                <p class="text-xs text-sub leading-relaxed line-clamp-3 opacity-80">${ch.desc}</p>
+            </div>
+        </div>`; 
+    }).join(''); 
+    
+    const sel = document.getElementById('chapter-selector'); 
+    const val = sel.value; 
+    sel.innerHTML = '<option value="">选择章节...</option>' + store.outline.map(ch => `<option value="${ch.id}">${ch.title}</option>`).join(''); 
+    if(val) sel.value = val; 
+}
 function updateProgressUI() { document.getElementById('chapter-progress-text').innerText=`${store.outline.length}/${document.getElementById('target-total-chapters').value}`; }
 function activateLoom() { document.getElementById('section-loom').classList.remove('hidden'); document.getElementById('section-loom').scrollIntoView({behavior:'smooth'}); }
 function loadChapterText() { const id=document.getElementById('chapter-selector').value; store.currentChapterId=id; document.getElementById('chapter-editor').value=(id&&store.chapterTexts[id])?store.chapterTexts[id]:""; updateWordCount(); }
