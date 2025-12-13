@@ -1071,7 +1071,7 @@ async function aiGenerateCharacter(btn) {
     }
 }
 // --- 修改结束 ---
-// --- 修改后的剧情延展逻辑 (直通大结局 + 100字简述) ---
+// --- 修改后的剧情延展逻辑 (改为每次生成 10 章) ---
 async function generateMoreOutline() { 
     // 1. 获取状态与目标
     const currentCount = store.outline.length; 
@@ -1086,15 +1086,23 @@ async function generateMoreOutline() {
     const btn = document.getElementById('btn-add-outline'); 
     const spinner = document.getElementById('outline-spinner'); 
     btn.disabled = true; 
-    btn.querySelector('span').innerText = "AI 全速推演中..."; 
+    btn.querySelector('span').innerText = "AI 正在推演..."; 
     spinner.classList.remove('hidden'); 
     
-    // 3. 【核心修改】计算本次生成数量：直接生成到目标总数
+    // 3. 【核心修改】计算本次生成数量：每次只生成 10 章，或者直到完结
+    const BATCH_SIZE = 10;
     const nextStart = currentCount + 1;
-    const nextEnd = targetTotal; // 直接指向最后一章
+    // 结束点是：当前进度+10章，或者是总目标章节数（取较小值）
+    const nextEnd = Math.min(targetTotal, nextStart + BATCH_SIZE - 1);
     const countToGen = nextEnd - nextStart + 1;
     
-    showToast(`正在规划剩余的 ${countToGen} 章大纲，请稍候...`, "info");
+    // 判断是否是最后一批（决定是否要求“大结局”）
+    const isFinalBatch = nextEnd === targetTotal;
+    const endingInstruction = isFinalBatch 
+        ? `并在第 ${nextEnd} 章完成故事收束（大结局）。` 
+        : `为后续剧情做好铺垫，不要急于完结（后续还有剧情）。`;
+
+    showToast(`正在规划第 ${nextStart} - ${nextEnd} 章大纲...`, "info");
 
     // 4. 准备Prompt素材
     const tags = (store.tags && store.tags.length > 0) ? `风格标签：${store.tags.join(', ')}` : ""; 
@@ -1112,12 +1120,12 @@ async function generateMoreOutline() {
             ...
         ]`;
 
-        // 5. 【核心指令修改】要求简述、直通结局
+        // 5. 【核心指令修改】动态调整要求
         const coreRequirement = `
         【重要要求】
-        1. **一次性生成**从第 ${nextStart} 章到第 ${nextEnd} 章（大结局）的所有大纲。
+        1. **一次性生成**从第 ${nextStart} 章到第 ${nextEnd} 章的大纲（共 ${countToGen} 章）。
         2. **控制字数**：每章大纲仅需 **100字以内** 的简要叙述，概括核心事件即可，不要长篇大论。
-        3. **节奏把控**：剧情需要紧凑，并在第 ${nextEnd} 章完成故事收束（大结局）。
+        3. **节奏把控**：剧情需要紧凑，${endingInstruction}
         4. 严禁中断，必须返回完整的 ${countToGen} 个对象。`;
 
         if (currentCount === 0) {
@@ -1127,13 +1135,14 @@ async function generateMoreOutline() {
             书名/梗概：${store.concept}
             ${tags}
             主要角色：${charInfo}
+            全书预计总章数：${targetTotal} 章。
             
             【任务】
-            请根据梗概，一次性规划全书大纲（共 ${targetTotal} 章）。
+            请根据梗概，规划书的前期剧情。
             ${coreRequirement}
             输出 JSON 格式。`;
 
-            userPrompt = `请生成第 1 章到第 ${targetTotal} 章的大纲。${formatInstruction}`;
+            userPrompt = `请生成第 ${nextStart} 章到第 ${nextEnd} 章的大纲。${formatInstruction}`;
 
         } else {
             // --- 场景 B：剧情延展 (接续前文) ---
@@ -1146,20 +1155,21 @@ async function generateMoreOutline() {
             【核心设定】
             核心梗概：${store.concept}
             ${tags}
+            全书预计总章数：${targetTotal} 章。
             
             【当前进度】
             前文最近剧情：
             ${recentOutlines}
             
             【任务】
-            请承接上文，一次性写完剩余所有章节大纲。
+            请承接上文，继续推演接下来的剧情。
             ${coreRequirement}
             输出 JSON 格式。`;
 
             userPrompt = `请生成第 ${nextStart} 章到第 ${nextEnd} 章的大纲。${formatInstruction}`;
         }
 
-        // 6. 调用 AI (可能需要较长时间，增加超时容忍度建议在服务端做，前端只能等待)
+        // 6. 调用 AI
         const res = await callAI([
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
@@ -1171,8 +1181,8 @@ async function generateMoreOutline() {
 
         // 写入 Store
         newChapters.forEach((ch, index) => {
-            // 防止 AI 生成数量超过我们需要数量
-            if (currentCount + index + 1 > targetTotal) return;
+            // 防止 AI 生成数量意外超过
+            if (currentCount + index + 1 > nextEnd) return;
 
             store.outline.push({
                 id: currentCount + index + 1,
@@ -1192,7 +1202,7 @@ async function generateMoreOutline() {
 
     } catch(e) { 
         console.error(e);
-        showToast("大纲生成失败 (可能是章节过多导致): " + e.message, "error"); 
+        showToast("大纲生成失败: " + e.message, "error"); 
     } finally { 
         btn.disabled = false; 
         btn.querySelector('span').innerText = "+ 延展剧情"; 
